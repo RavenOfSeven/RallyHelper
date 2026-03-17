@@ -1,11 +1,3 @@
--- RallyHelper_UI.lua (FINAL, korrigiert: title hover/drag nil-safe, bg-only fade)
--- Änderungen:
---  - titleFrame vor Verwendung erzeugt
---  - Hover/Drag-Handler verwenden Closures und prüfen auf Existenz
---  - Fade wirkt nur auf bgFrame (Texte/Icons bleiben sichtbar)
---  - bgFrame fängt keine Maus-Events; Rand dezent
---  - Slider/Scale/Size/UpdateTexts unverändert
-
 local ui
 local sizeUI
 local locked = false
@@ -20,9 +12,6 @@ local DEFAULT_SCALE = 1.0
 
 local floor = math.floor
 
--- =========================================================
--- FORMAT
--- =========================================================
 local function FormatTime(sec)
   if not sec or sec <= 0 then return "ready" end
   local h = floor(sec / 3600)
@@ -47,9 +36,6 @@ local function EnsureDB()
   return RallyHelperDB.ui
 end
 
--- =========================================================
--- Helper: safe fade for bgFrame only
--- =========================================================
 local function FadeInBg(bg, timeToFade, startAlpha, endAlpha)
   if not bg then return end
   if type(UIFrameFadeIn) == "function" then
@@ -68,9 +54,6 @@ local function FadeOutBg(bg, timeToFade, startAlpha, endAlpha)
   end
 end
 
--- =========================================================
--- LAYOUT
--- =========================================================
 local function ApplyLayout()
   if not ui or not ui.initialized then return end
 
@@ -105,9 +88,6 @@ local function ApplyLayout()
   ui.wb:SetPoint("TOPLEFT", ui, "TOPLEFT", PAD, -138); ui.wb:SetWidth(CONTENT_W)
 end
 
--- =========================================================
--- TEXT UPDATE (Vanilla‑safe) — uses Core field names
--- =========================================================
 local function UpdateTexts()
   if not ui or not ui.initialized then return end
 
@@ -139,9 +119,6 @@ local function UpdateTexts()
   ui.wb:SetText("Warchief's Blessing: " .. (DB.lastWB and FormatTime(DB.lastWB + 10800 - t) or "ready"))
 end
 
--- =========================================================
--- MAIN UI
--- =========================================================
 local function CreateUI()
   local S = EnsureDB()
 
@@ -159,18 +136,15 @@ local function CreateUI()
   ui:SetHeight(S.h or DEFAULT_H)
   ui:ClearAllPoints()
 
-  -- restore saved position if present (use BOTTOMLEFT coords)
   if S.x and S.y then
     ui:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", S.x, S.y)
   else
     ui:SetPoint("CENTER", UIParent, "CENTER", 0, 200)
   end
 
-  -- create a dedicated background frame that holds the backdrop and will be faded
   if not ui.bgFrame then
     ui.bgFrame = CreateFrame("Frame", nil, ui)
     ui.bgFrame:SetAllPoints(ui)
-    -- ensure bgFrame is behind the ui content
     local bgLevel = (ui:GetFrameLevel() or 0) - 2
     if bgLevel < 0 then bgLevel = 0 end
     ui.bgFrame:SetFrameLevel(bgLevel)
@@ -184,7 +158,6 @@ local function CreateUI()
     ui.bgFrame:SetBackdropColor(0, 0, 0, 0.75)
     ui.bgFrame:SetBackdropBorderColor(0, 0, 0, 0)
 
-    -- IMPORTANT: do NOT let bgFrame capture mouse events (so dragging works on parent/title)
     ui.bgFrame:EnableMouse(false)
     ui.bgFrame:SetAlpha(0.18)
   else
@@ -192,20 +165,18 @@ local function CreateUI()
     ui.bgFrame:SetAllPoints(ui)
   end
 
-  -- default scale
   local scale = S.scale or DEFAULT_SCALE
   ui:SetScale(scale)
 
   if not ui.initialized then
     ui.initialized = true
 
-    -- create titleFrame first (so any later references are safe)
     if not ui.titleFrame or (type(ui.titleFrame) ~= "table") then
       ui.titleFrame = CreateFrame("Frame", nil, ui)
       ui.titleFrame:SetPoint("TOPLEFT", ui, "TOPLEFT", 0, 0)
       ui.titleFrame:SetPoint("TOPRIGHT", ui, "TOPRIGHT", 0, 0)
       ui.titleFrame:SetHeight(24)
-      -- ensure titleFrame is above bgFrame
+
       ui.titleFrame:SetFrameLevel((ui.bgFrame and ui.bgFrame:GetFrameLevel() or 0) + 2)
     end
 
@@ -245,7 +216,6 @@ local function CreateUI()
     ui.dmf = CenterText(0.7, 0.4, 1)
     ui.wb  = CenterText(1, 0.6, 0.1)
 
-    -- ===== Robust Drag/Mouse handlers (closure-based, nil-safe) =====
     ui:EnableMouse(true)
     ui:SetMovable(true)
     ui:RegisterForDrag("LeftButton")
@@ -255,7 +225,6 @@ local function CreateUI()
         if not frame then return end
         if locked then return end
         if not frame:IsMovable() then return end
-        -- StartMoving is safe to call
         pcall(function() frame:StartMoving() end)
       end
     end
@@ -275,7 +244,6 @@ local function CreateUI()
     ui:SetScript("OnDragStart", makeStartMoving(ui))
     ui:SetScript("OnDragStop", makeStopMoving(ui))
 
-    -- ensure titleFrame exists and forwards drag/hover safely
     ui.titleFrame:EnableMouse(true)
     ui.titleFrame:RegisterForDrag("LeftButton")
 
@@ -298,7 +266,6 @@ local function CreateUI()
       s.y = bottom
     end)
 
-    -- safe mouse down/up bookkeeping
     ui:SetScript("OnMouseDown", function()
       if locked then return end
       pcall(function() ui._dragStartX, ui._dragStartY = GetCursorPosition() end)
@@ -307,10 +274,7 @@ local function CreateUI()
     ui:SetScript("OnMouseUp", function()
       pcall(function() ui._dragStartX, ui._dragStartY = nil, nil end)
     end)
-    -- ===== end robust drag block =====
 
-    -- Hover fade: only affect bgFrame (not texts/icons)
-    -- Use closures referencing bgFrame to avoid nil 'self' issues
     local bg = ui.bgFrame
     if bg then bg:SetAlpha(0.18) end
 
@@ -323,7 +287,6 @@ local function CreateUI()
       if b then pcall(FadeOutBg, b, 0.25, b:GetAlpha() or 1.0, 0.18) end
     end)
 
-    -- titleFrame hover uses closure to bgFrame (no reliance on 'self')
     ui.titleFrame:SetScript("OnEnter", function()
       local b = ui.bgFrame
       if b then pcall(FadeInBg, b, 0.15, b:GetAlpha() or 0.18, 1.0) end
@@ -333,7 +296,6 @@ local function CreateUI()
       if b then pcall(FadeOutBg, b, 0.25, b:GetAlpha() or 1.0, 0.18) end
     end)
 
-    -- ensure FontString has no mouse scripts (FontStrings may not support them)
     if ui.title and type(ui.title.SetScript) == "function" then
       ui.title:SetScript("OnEnter", nil)
       ui.title:SetScript("OnLeave", nil)
@@ -352,9 +314,6 @@ local function CreateUI()
   UpdateTexts()
 end
 
--- =========================================================
--- SIZE WINDOW (SetPoint safe + robust sliders + scale slider)
--- =========================================================
 local function CreateSizeUI()
   sizeUI = _G["RallyHelperSizeFrame"]
   if not sizeUI then
@@ -401,7 +360,6 @@ local function CreateSizeUI()
       return s
     end
 
-    -- Width slider
     sizeUI.w = MakeSlider("Width", 300, 700, -28, function(v)
       if ui then ui:SetWidth(v) end
       local s = EnsureDB()
@@ -409,7 +367,6 @@ local function CreateSizeUI()
       ApplyLayout()
     end, 10)
 
-    -- Height slider
     sizeUI.h = MakeSlider("Height", 140, 400, -78, function(v)
       if ui then ui:SetHeight(v) end
       local s = EnsureDB()
@@ -417,7 +374,6 @@ local function CreateSizeUI()
       ApplyLayout()
     end, 10)
 
-    -- Scale slider (0.7 - 1.3 step 0.05)
     local function SetScaleValue(v)
       local sdb = EnsureDB()
       sdb.scale = v
@@ -444,9 +400,6 @@ local function CreateSizeUI()
   sizeUI:Hide()
 end
 
--- =========================================================
--- TOGGLES
--- =========================================================
 RallyHelper_ToggleUI = function()
   if not ui then CreateUI() end
   if ui:IsShown() then ui:Hide() else ui:Show() end
