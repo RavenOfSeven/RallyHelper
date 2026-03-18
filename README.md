@@ -1,6 +1,10 @@
 # RallyHelper
 
-**RallyHelper** shows timers and last‑seen information for Onyxia, Nefarian, Zul'Gurub (ZG) and the Darkmoon Faire (DMF). The UI is movable, resizable and includes a scale slider so icons and text can be enlarged or reduced. The background fades on hover while text and icons remain visible.
+**RallyHelper** shows timers and last‑seen information for Onyxia, Nefarian, Zul'Gurub (ZG) and the Darkmoon Faire (DMF).  
+The UI is movable, resizable and includes a scale slider so icons and text can be enlarged or reduced.  
+The background fades on hover while text and icons remain visible.
+
+RallyHelper is designed for **Turtle WoW (Vanilla 1.12.1)** and focuses on **robust, verifiable world buff tracking** without relying on manipulated server time.
 
 ---
 
@@ -14,46 +18,86 @@
 - **Scale slider** to change text and icon sizes  
 - **Hover fade** that affects only the background (text and icons stay visible)  
 - **Movable window** with position persistence across sessions  
-- **Robust handlers** to avoid common Lua errors on drag/hover
+- **UI lock mode** to prevent accidental movement or resizing  
+- **Multi‑source verification** for received world buff events  
+- **Channel throttling** to avoid spam and duplicate timestamps  
+- **Robust handlers** to avoid common Lua errors on drag/hover  
 
 ---
 
 ## Commands
 
-**In‑game function calls** (can be used from chat with `/run` or from other addons):
-
-- `RallyHelper_ToggleUI()` — Toggle the main RallyHelper window.  
-- `RallyHelper_ToggleSizeUI()` — Open the size/scale window (Width, Height, Scale sliders).
-
-**Slash command (recommended)**
-
-RallyHelper provides a convenient slash command:
+### Slash command
 
 ```
 /rally
 ```
 
-Typing `/rally` will toggle the main UI. If you prefer to call the function directly from chat or macros, use:
+- `/rally` — Toggle the main UI  
+- `/rally lock` — Lock or unlock the UI (prevents moving and resizing)  
+- `/rally reset` — Reset UI position and size  
 
-```lua
-/run RallyHelper_ToggleUI()
-```
+### In‑game function calls
 
-**Optional: Add or change slash commands**
+- `RallyHelper_ToggleUI()` — Toggle the main RallyHelper window  
+- `RallyHelper_ToggleSizeUI()` — Open the size/scale window  
 
-If your version does not yet register `/rally`, add this snippet to `RallyHelper.lua` (or any file loaded by the addon):
+---
 
-```lua
--- register slash command /rally
-SLASH_RALLYHELPER1 = "/rally"
-SlashCmdList["RALLYHELPER"] = function(msg)
-  -- toggle UI
-  if not RallyHelper_ToggleUI then return end
-  RallyHelper_ToggleUI()
-end
-```
+## Why RallyHelper exists
 
-Place the snippet near your addon initialization code so it runs when the addon loads.
+Before RallyHelper, **PizzaWorldBuffs** was used for world buff tracking.
+
+### What PizzaWorldBuffs did well
+- Introduced a simple and effective way to share world buff timestamps  
+- Lightweight communication model  
+- Easy to understand and extend  
+- Solved a real problem when no alternatives existed  
+
+### Why it became unreliable on Turtle WoW
+On Turtle WoW the server time can be manipulated or desynchronized, which caused:
+- incorrect timestamps  
+- negative or drifting cooldowns  
+- missing buff triggers  
+- inconsistent results between players  
+
+PizzaWorldBuffs was never designed for manipulated server time or modern Turtle WoW quirks, so these issues were outside its original scope.
+
+### Why RallyHelper was created
+RallyHelper is a **modernized, stable successor** that:
+- does **not rely on server time**  
+- uses **multi‑source verification** before accepting events  
+- is resilient against channel spam  
+- works reliably with desynced timestamps  
+- integrates cleanly with pfUI and modern Turtle setups  
+
+**PizzaWorldBuffs inspired this addon. RallyHelper exists because the original idea was good — it just needed a more robust foundation.**
+
+---
+
+## Compatibility
+
+### ✔ Confirmed working with
+- pfUI (Turtle version)  
+- VanillaFixes  
+- NameplateFixes  
+- Questie / pfQuest  
+- LunaUnitFrames  
+- AtlasLoot  
+- Aux / Auctionator  
+- Gatherer / GatherLite  
+- KTM / ThreatMeter  
+- Standard Blizzard UI  
+
+### ❌ Incompatible addons (must be disabled)
+
+**GetHead**  
+Hooks and modifies `CHAT_MSG_MONSTER_YELL`, which prevents RallyHelper from reliably detecting world buff triggers.
+
+**PizzaWorldBuffs**  
+Uses the same communication channel and sends unverified events, which interferes with RallyHelper’s verification system and can cause incorrect or missing timestamps.
+
+If either addon is enabled, RallyHelper cannot function reliably.
 
 ---
 
@@ -66,79 +110,46 @@ Place the snippet near your addon initialization code so it runs when the addon 
    - `RallyHelper_UI.lua`
    - `README.md`
    - `LICENSE`
-3. Create a **Release** and attach a ZIP that contains the `RallyHelper/` folder (the ZIP must include the addon folder at the root).  
-4. In Turtle WoW (or any client that supports GitHub installs), add the Release ZIP URL or the release asset link.
-
-**Local test:** unzip the release into your `Interface/AddOns/` folder and run `/reload` in game.
+3. Create a **Release** and attach a ZIP that contains the `RallyHelper/` folder at the root.  
+4. Install the ZIP via GitHub or extract it into `Interface/AddOns/`.
 
 ---
 
 ## Usage
 
-- **Open/Close UI:** `/rally` or `/run RallyHelper_ToggleUI()`  
+- **Open/Close UI:** `/rally`  
 - **Open Size/Scale window:** `/run RallyHelper_ToggleSizeUI()`  
-- **Move window:** Left‑click and drag the title area or anywhere in the frame.  
-- **Resize:** Use the Width and Height sliders in the Size window.  
-- **Scale:** Use the Scale slider in the Size window to change text and icon sizes.  
-- **Hover:** Move the mouse over the window to fade the background in; move away to fade out.  
-- **Persistence:** Width, Height, Scale and position are saved to `RallyHelperDB.ui`.
+- **Move window:** Drag the title bar or frame (unless locked)  
+- **Resize / Scale:** Use sliders in the Size window  
+- **Lock UI:** `/rally lock`  
+- **Persistence:** Position, size and scale are saved in `RallyHelperDB.ui`
 
 ---
 
 ## Troubleshooting
 
-**1. Addon does not appear / UI invisible**
-- Ensure the ZIP you installed contains the `RallyHelper/` folder at the root (not nested inside another folder).
-- Confirm `RallyHelper.toc` lists both `RallyHelper.lua` and `RallyHelper_UI.lua`.
-- Check the SavedVariables folder is writable by the client.
+**UI can still be moved or resized while locked**  
+- Ensure you are using the latest version.  
+- Run `/reload` after locking the UI.
 
-**2. Lua errors on hover or drag**
-- Update to the latest version of the addon (errors were fixed in recent builds).
-- Run `/reload` after updating.
-- If an error persists, copy the exact error message including file name and line number and open an issue on GitHub.
+**World buffs not detected**
+- Disable **GetHead** and **PizzaWorldBuffs**.  
+- Ensure you are in the RallyHelper communication channel.
 
-**3. Slash command `/rally` does nothing**
-- Make sure the slash registration snippet (see above) is present and executed on addon load.
-- Check for typos in the snippet or conflicts with other addons that may override slash commands.
-
-**4. Position or size not saved**
-- Verify `RallyHelperDB` exists in your SavedVariables after running the addon.
-- Ensure the client can write to the SavedVariables folder (file system permissions).
-
-**5. Background fades but text/icons disappear**
-- This addon intentionally fades only the background. If text/icons disappear, another addon or a modified UI file may be interfering. Try disabling other UI addons to isolate the issue.
-
----
-
-## Reporting Issues
-
-When opening an issue on GitHub include:
-- **Exact error message** (file and line number).  
-- **Steps to reproduce** (what you clicked, hovered, or dragged).  
-- **Client version** (Turtle WoW build or other) and any other addons enabled.  
-- **Screenshot** if helpful.
+**Incorrect timers**
+- RallyHelper requires at least two independent confirmations before accepting an event.  
+- Single or spoofed messages are intentionally ignored.
 
 ---
 
 ## Developer Notes
 
+- **Saved variables:** `RallyHelperDB`, `RallyHelperDB.ui`  
 - **Exported globals:** `RallyHelper_ToggleUI`, `RallyHelper_ToggleSizeUI`  
-- **Saved variables:** `RallyHelperDB.ui` stores `w`, `h`, `x`, `y`, `scale`  
-- **Files referenced in `.toc`:** `RallyHelper.lua`, `RallyHelper_UI.lua`  
-- **Recommended TOC header** (adjust `Interface` to your target client):
-
-```toc
-## Interface: 11404
-## Title: RallyHelper
-## Notes: Shows Onyxia/Nefarian/DMF/ZG timers; scalable UI with hover fade
-## Author: Weirdpuppy
-## Version: 1.0.0
-RallyHelper.lua
-RallyHelper_UI.lua
-```
+- **Target client:** Turtle WoW (Vanilla 1.12.1)  
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License**. See the `LICENSE` file for details.
+This project is licensed under the **MIT License**.
