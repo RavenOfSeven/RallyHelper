@@ -162,7 +162,7 @@ RallyHelper is a free and open‑source addon developed in my spare time.
 
 If you find it useful and would like to support its continued development, you can buy me a coffee:
 
-☕ https://ko-fi.com/YOUR_KOFI_NAME
+☕ https://ko-fi.com/weirdpuyppy94
 
 Any support is greatly appreciated.
 I’m currently going through a financially challenging period, and contributions help me continue maintaining and improving this project.
