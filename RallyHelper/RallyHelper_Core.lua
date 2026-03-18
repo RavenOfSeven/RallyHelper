@@ -137,8 +137,14 @@ local function HandleChannel(msg, channel)
   local ev, ts, sender, zone = string.match(msg, "^([^|]+)|([^|]+)|([^|]+)|?(.*)$")
   ts = tonumber(ts)
   if not ev or not ts or not sender then return end
-  local ok, bestTs, bestZone = VerifyEvent(ev, ts, sender, zone)
-  if ok then AcceptEvent(ev, bestTs, bestZone) end
+  if ev == "ZG" then
+  AcceptEvent(ev, ts, zone)
+  return
+end
+
+local ok, bestTs, bestZone = VerifyEvent(ev, ts, sender, zone)
+if ok then AcceptEvent(ev, bestTs, bestZone) end
+
 end
 
 local function HandleYell(npc, msg)
@@ -150,9 +156,11 @@ local function HandleYell(npc, msg)
   if npc == "Overlord Runthak" and string.find(msg, "Dragonslayer") then SendEvent("NEF_H") return end
 
   if npc == "Molthor" and (string.find(msg, "slayer of Hakkar") or string.find(msg, "Hakkar")) then
-    SendEvent("ZG")
-    return
-  end
+  AcceptEvent("ZG", time())
+  SendEvent("ZG")
+  return
+end
+
 
   if npc == "Thrall" and (string.find(msg, "Warchief") or string.find(msg, "Rend")) then
     SendEvent("WB", "Orgrimmar")
