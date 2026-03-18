@@ -1,6 +1,5 @@
 local ui
 local sizeUI
-local locked = false
 
 local ONY_ICON = "Interface\\Icons\\INV_Misc_Head_Dragon_Red"
 local NEF_ICON = "Interface\\Icons\\INV_Misc_Head_Dragon_Blue"
@@ -12,12 +11,26 @@ local DEFAULT_SCALE = 1.0
 
 local floor = math.floor
 
+local function IsLocked()
+  return RallyHelperDB and RallyHelperDB.locked
+end
+
 local function FormatTime(sec)
-  if not sec or sec <= 0 then return "ready" end
+  if not sec or sec <= 0 then return "ready", 0 end
   local h = floor(sec / 3600)
   local m = floor((sec - h * 3600) / 60)
-  if h > 0 then return h .. "h " .. m .. "m" end
-  return m .. "m"
+  if h > 0 then return h .. "h " .. m .. "m", sec end
+  return m .. "m", sec
+end
+
+local function Colorize(text, sec)
+  if not sec or sec <= 0 then
+    return "|cff33ff33" .. text .. "|r"
+  elseif sec < 1800 then
+    return "|cffffff33" .. text .. "|r"
+  else
+    return "|cffff3333" .. text .. "|r"
+  end
 end
 
 local function FormatAgo(ts)
@@ -29,7 +42,6 @@ local function FormatAgo(ts)
   local m = floor((d - h * 3600) / 60)
   return h .. "h " .. m .. "m ago"
 end
-
 local function EnsureDB()
   RallyHelperDB = RallyHelperDB or {}
   RallyHelperDB.ui = RallyHelperDB.ui or {}
@@ -237,7 +249,7 @@ local function CreateUI()
     ui:RegisterForDrag("LeftButton")
 
     ui:SetScript("OnDragStart", function()
-      if locked then return end
+      if IsLocked() then return end
       pcall(function() ui:StartMoving() end)
     end)
 
@@ -252,7 +264,7 @@ local function CreateUI()
     ui.titleFrame:RegisterForDrag("LeftButton")
 
     ui.titleFrame:SetScript("OnDragStart", function()
-      if locked then return end
+      if IsLocked() then return end
       pcall(function() ui:StartMoving() end)
     end)
 
@@ -335,9 +347,11 @@ local function CreateSizeUI()
       s:SetValueStep(step or 1)
 
       s:SetScript("OnValueChanged", function()
-        local v = tonumber(arg1) or tonumber(s:GetValue()) or 0
-        setter(v)
-      end)
+  if IsLocked() then return end
+  local v = tonumber(arg1) or tonumber(s:GetValue()) or 0
+  setter(v)
+end)
+
 
       return s
     end
