@@ -12,6 +12,7 @@ local DB_VERSION = 1
 
 local DB
 local verify = {}
+local RH_Users = {}
 local lastSend = {}
 
 local floor = math.floor
@@ -132,20 +133,62 @@ local function AcceptEvent(ev, ts, zone)
   end
 end
 
+local RH_Unconfirmed = {}
+
+local function AddUnconfirmedEvent(ev, ts, sender, zone)
+  RH_Unconfirmed[ev] = {
+    ts = ts,
+    sender = sender,
+    zone = zone,
+    time = time(),
+  }
+  if type(RallyHelper_UpdateUI) == "function" then
+    RallyHelper_UpdateUI()
+  end
+end
+
 local function HandleChannel(msg, channel)
   if channel ~= RH_CHANNEL_NAME then return end
-  local ev, ts, sender, zone = string.match(msg, "^([^|]+)|([^|]+)|([^|]+)|?(.*)$")
-  ts = tonumber(ts)
+  if type(msg) ~= "string" then return end
+
+  local ev, ts, sender, zone = msg:match("^([^|]+)|([^|]+)|([^|]+)|?(.*)$")
   if not ev or not ts or not sender then return end
+
+  ts = tonumber(ts)
+  if not ts then return end
+  if zone == "" then zone = nil end
+
+  RH_Users[sender] = time()
+
   if ev == "ZG" then
-  AcceptEvent(ev, ts, zone)
-  return
+    AcceptEvent(ev, ts, zone)
+    return
+  end
+
+  local ok, bestTs, bestZone = VerifyEvent(ev, ts, sender, zone)
+  if ok then
+    AcceptEvent(ev, bestTs, bestZone)
+    RH_Unconfirmed[ev] = nil
+    return
+  end
+
+  AddUnconfirmedEvent(ev, ts, sender, zone)
 end
 
-local ok, bestTs, bestZone = VerifyEvent(ev, ts, sender, zone)
-if ok then AcceptEvent(ev, bestTs, bestZone) end
-
+local function CountUsers()
+  local now = time()
+  local count = 0
+  for name, ts in pairs(RH_Users) do
+    if now - ts < 60 then
+      count = count + 1
+    else
+      RH_Users[name] = nil
+    end
+  end
+  return count
 end
+
+
 
 local function HandleYell(npc, msg)
   if not npc or not msg then return end
@@ -214,6 +257,8 @@ SlashCmdList["RALLYHELPER"] = function(msg)
   elseif msg == "lock" then
     DB.locked = not DB.locked
     DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] UI lock: " .. tostring(DB.locked))
+  elseif msg == "users" then
+  DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Users online: " .. CountUsers())
   elseif msg == "debug" then
     DEFAULT_CHAT_FRAME:AddMessage("ZG: " .. (DB.lastZG and FormatAgo(DB.lastZG) or "unknown"))
     DEFAULT_CHAT_FRAME:AddMessage("DMF: " .. (DB.lastDMFTime and FormatAgo(DB.lastDMFTime) or "unknown"))
