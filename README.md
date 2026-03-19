@@ -139,7 +139,7 @@ It is designed for accuracy first, especially on a server like Turtle WoW where 
 RallyHelper is a free community addon.  
 If you enjoy it and want to support development, you can do so here:
 
-https://ko-fi.com/Jonas  
+https://ko-fi.com/weirdpuyppy94
 (optional, no pressure — the addon will always remain free)
 
 ---
