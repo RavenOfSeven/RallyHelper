@@ -125,6 +125,17 @@ local function UpdateTexts()
   local DB = RallyHelperDB
   local t = time()
 
+  local function Unconfirmed(ev)
+    return RH_Unconfirmed and RH_Unconfirmed[ev]
+  end
+
+  local function FormatUnconfirmed(ev, label)
+    local u = RH_Unconfirmed[ev]
+    if not u then return nil end
+    local ago = FormatAgo(u.ts)
+    return "|cFFAAAAAA" .. label .. ": unconfirmed (" .. ago .. ")|r"
+  end
+
   if not DB then
     ui.onySW:SetText("Stormwind: unknown")
     ui.onyOG:SetText("Orgrimmar: unknown")
@@ -136,10 +147,29 @@ local function UpdateTexts()
     return
   end
 
-  ui.onySW:SetText("Stormwind: " .. (DB.lastOnyA and FormatTime(DB.lastOnyA + 7200 - t) or "ready"))
-  ui.onyOG:SetText("Orgrimmar: " .. (DB.lastOnyH and FormatTime(DB.lastOnyH + 7200 - t) or "ready"))
-  ui.nefSW:SetText("Stormwind: " .. (DB.lastNefA and FormatTime(DB.lastNefA + 7200 - t) or "ready"))
-  ui.nefOG:SetText("Orgrimmar: " .. (DB.lastNefH and FormatTime(DB.lastNefH + 7200 - t) or "ready"))
+  if Unconfirmed("ONY_A") then
+    ui.onySW:SetText(FormatUnconfirmed("ONY_A", "Stormwind"))
+  else
+    ui.onySW:SetText("Stormwind: " .. (DB.lastOnyA and FormatTime(DB.lastOnyA + 7200 - t) or "ready"))
+  end
+
+  if Unconfirmed("ONY_H") then
+    ui.onyOG:SetText(FormatUnconfirmed("ONY_H", "Orgrimmar"))
+  else
+    ui.onyOG:SetText("Orgrimmar: " .. (DB.lastOnyH and FormatTime(DB.lastOnyH + 7200 - t) or "ready"))
+  end
+
+  if Unconfirmed("NEF_A") then
+    ui.nefSW:SetText(FormatUnconfirmed("NEF_A", "Stormwind"))
+  else
+    ui.nefSW:SetText("Stormwind: " .. (DB.lastNefA and FormatTime(DB.lastNefA + 7200 - t) or "ready"))
+  end
+
+  if Unconfirmed("NEF_H") then
+    ui.nefOG:SetText(FormatUnconfirmed("NEF_H", "Orgrimmar"))
+  else
+    ui.nefOG:SetText("Orgrimmar: " .. (DB.lastNefH and FormatTime(DB.lastNefH + 7200 - t) or "ready"))
+  end
 
   ui.zg:SetText("ZG last drop: " .. (DB.lastZG and FormatAgo(DB.lastZG) or "unknown"))
 
@@ -147,8 +177,13 @@ local function UpdateTexts()
   local dmfText = DB.lastDMFTime and (FormatAgo(DB.lastDMFTime) .. " in " .. dmfZone) or ("unknown in " .. dmfZone)
   ui.dmf:SetText("DMF last seen: " .. dmfText)
 
-  ui.wb:SetText("Warchief's Blessing: " .. (DB.lastWB and FormatTime(DB.lastWB + 10800 - t) or "ready"))
+  if Unconfirmed("WB") then
+    ui.wb:SetText(FormatUnconfirmed("WB", "Warchief's Blessing"))
+  else
+    ui.wb:SetText("Warchief's Blessing: " .. (DB.lastWB and FormatTime(DB.lastWB + 10800 - t) or "ready"))
+  end
 end
+
 
 local function CreateUI()
   local S = EnsureDB()
