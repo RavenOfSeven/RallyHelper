@@ -1,160 +1,151 @@
-# RallyHelper
+RallyHelper
 
-**RallyHelper** shows timers and last‑seen information for Onyxia, Nefarian, Zul'Gurub (ZG) and the Darkmoon Faire (DMF).  
-The UI is movable, resizable and includes a scale slider so icons and text can be enlarged or reduced.  
-The background fades on hover while text and icons remain visible.
-
-RallyHelper is designed for **Turtle WoW (Vanilla 1.12.1)** and focuses on **robust, verifiable world buff tracking** without relying on manipulated server time.
+RallyHelper is a lightweight, modern and reliable world buff tracker for Turtle WoW.  
+It focuses on accuracy, verification, and zero spam, making it a clean alternative to older addons like PizzaWorldBuffs.
 
 ---
 
-## Features
+✨ Features
 
-- **Onyxia / Nefarian timers** for Alliance and Horde spawns  
-- **ZG last drop** timestamp  
-- **DMF last seen** timestamp including zone  
-- **Warchief’s Blessing** cooldown display  
-- **Resizable window** with Width / Height sliders  
-- **Scale slider** to change text and icon sizes  
-- **Hover fade** that affects only the background (text and icons stay visible)  
-- **Movable window** with position persistence across sessions  
-- **UI lock mode** to prevent accidental movement or resizing  
-- **Multi‑source verification** for received world buff events  
-- **Channel throttling** to avoid spam and duplicate timestamps  
-- **Robust handlers** to avoid common Lua errors on drag/hover  
+✔ Verified World Buff Detection
+RallyHelper only accepts world buff events when they are confirmed by multiple RallyHelper users.  
+This prevents:
+- fake timers  
+- manipulated timestamps  
+- false positives  
+- addon spam  
+
+✔ Unconfirmed Buffs (NEW in v1.0.1)
+When only one source reports a buff, RallyHelper now shows a preliminary timer marked as:
+
+`
+unconfirmed (12s ago)
+`
+
+This helps new users understand that the addon is working even before enough RallyHelper users are online.
+
+✔ Zero Channel Spam
+RallyHelper sends only real events, never:
+- heartbeats  
+- version checks  
+- periodic updates  
+- map sync  
+- debug spam  
+
+This keeps the RallyHelper channel clean and efficient.
+
+✔ Anonymous User Count (NEW)
+Use:
+
+`
+/rally users
+`
+
+to see how many RallyHelper users are currently active.  
+This is fully anonymous and requires no extra messages.
+
+✔ DMF Detection
+Automatically detects Darkmoon Faire NPCs and records the last seen location.
+
+✔ Clean UI with pfUI Support
+Resizable, movable, minimalistic UI with optional pfUI skinning.
 
 ---
 
-## Commands
+📦 Installation
 
-### Slash command
+1. Download the latest release ZIP  
+2. Extract it into your Interface/AddOns folder  
+3. Ensure the folder name is RallyHelper  
+4. Restart the game
 
-```
+---
+
+🧭 Commands
+
+`
 /rally
-```
+`
+Toggle the UI.
 
-- `/rally` — Toggle the main UI  
-- `/rally lock` — Lock or unlock the UI (prevents moving and resizing)  
-- `/rally reset` — Reset UI position and size  
+`
+/rally status
+`
+Print timers in chat.
 
-### In‑game function calls
+`
+/rally share
+`
+Share timers to chat.
 
-- `RallyHelper_ToggleUI()` — Toggle the main RallyHelper window  
-- `RallyHelper_ToggleSizeUI()` — Open the size/scale window  
+`
+/rally users
+`
+Show number of active RallyHelper users (anonymous).
 
----
+`
+/rally lock
+`
+Lock or unlock the UI.
 
-## Why RallyHelper exists
-
-Before RallyHelper, **PizzaWorldBuffs** was used for world buff tracking.
-
-### What PizzaWorldBuffs did well
-- Introduced a simple and effective way to share world buff timestamps  
-- Lightweight communication model  
-- Easy to understand and extend  
-- Solved a real problem when no alternatives existed  
-
-### Why it became unreliable on Turtle WoW
-On Turtle WoW the server time can be manipulated or desynchronized, which caused:
-- incorrect timestamps  
-- negative or drifting cooldowns  
-- missing buff triggers  
-- inconsistent results between players  
-
-PizzaWorldBuffs was never designed for manipulated server time or modern Turtle WoW quirks, so these issues were outside its original scope.
-
-### Why RallyHelper was created
-RallyHelper is a **modernized, stable successor** that:
-- does **not rely on server time**  
-- uses **multi‑source verification** before accepting events  
-- is resilient against channel spam  
-- works reliably with desynced timestamps  
-- integrates cleanly with pfUI and modern Turtle setups  
-
-**PizzaWorldBuffs inspired this addon. RallyHelper exists because the original idea was good — it just needed a more robust foundation.**
+`
+/rally reset
+`
+Reset UI position and settings.
 
 ---
 
-## Compatibility
+🆕 Changelog
 
-### ✔ Confirmed working with
-- pfUI (Turtle version)  
-- VanillaFixes  
-- NameplateFixes  
-- Questie / pfQuest  
-- LunaUnitFrames  
-- AtlasLoot  
-- Aux / Auctionator  
-- Gatherer / GatherLite  
-- KTM / ThreatMeter  
-- Standard Blizzard UI  
+v1.0.1 — Stability & Early Adoption Update
 
-### ❌ Incompatible addons (must be disabled)
+Fixes
+- Resolved a Lua error caused by malformed addon messages in the RallyHelper channel  
+- Hardened message parsing to prevent crashes from invalid or unexpected data  
+- Improved Horde/Alliance yell handling for Ony, Nef, ZG, WB  
 
-**GetHead**  
-Hooks and modifies `CHAT_MSG_MONSTER_YELL`, which prevents RallyHelper from reliably detecting world buff triggers.
+New
+- Added Unconfirmed Buffs: preliminary timers shown when receiving unverified data  
+- Added /rally users to display the number of active RallyHelper users (anonymous)  
 
-**PizzaWorldBuffs**  
-Uses the same communication channel and sends unverified events, which interferes with RallyHelper’s verification system and can cause incorrect or missing timestamps.
-
-If either addon is enabled, RallyHelper cannot function reliably.
+Improvements
+- More reliable event handling and zone normalization  
+- Cleaner UI updates and better feedback during low‑population usage  
+- Increased stability in busy cities and during world buff spam  
 
 ---
 
-After extracting the ZIP, the folder `RallyHelper` must be placed directly into `Interface/AddOns/`.
+❓ Why RallyHelper?
+
+Older addons like PizzaWorldBuffs accept any message from any source, which leads to:
+- false timers  
+- manipulated timestamps  
+- channel spam  
+- inconsistent data  
+
+RallyHelper solves this by using:
+- verification  
+- clean communication  
+- modern Lua patterns  
+- zero spam  
+- robust parsing  
+
+It is designed for accuracy first, especially on a server like Turtle WoW where reliability matters.
 
 ---
 
-## Usage
+❤️ Support
 
-- **Open/Close UI:** `/rally`  
-- **Open Size/Scale window:** `/run RallyHelper_ToggleSizeUI()`  
-- **Move window:** Drag the title bar or frame (unless locked)  
-- **Resize / Scale:** Use sliders in the Size window  
-- **Lock UI:** `/rally lock`  
-- **Persistence:** Position, size and scale are saved in `RallyHelperDB.ui`
+RallyHelper is a free community addon.  
+If you enjoy it and want to support development, you can do so here:
 
----
-
-## Troubleshooting
-
-**UI can still be moved or resized while locked**  
-- Ensure you are using the latest version.  
-- Run `/reload` after locking the UI.
-
-**World buffs not detected**
-- Disable **GetHead** and **PizzaWorldBuffs**.  
-- Ensure you are in the RallyHelper communication channel.
-
-**Incorrect timers**
-- RallyHelper requires at least two independent confirmations before accepting an event.  
-- Single or spoofed messages are intentionally ignored.
+https://ko-fi.com/Jonas  
+(optional, no pressure — the addon will always remain free)
 
 ---
 
-## Developer Notes
+📜 License
 
-- **Saved variables:** `RallyHelperDB`, `RallyHelperDB.ui`  
-- **Exported globals:** `RallyHelper_ToggleUI`, `RallyHelper_ToggleSizeUI`  
-- **Target client:** Turtle WoW (Vanilla 1.12.1)  
-
----
-
-## License
-
-This project is licensed under the **MIT License**.
-
----
-
-## Support the Project
-
-RallyHelper is a free and open‑source addon developed in my spare time.
-
-If you find it useful and would like to support its continued development, you can buy me a coffee:
-
-☕ https://ko-fi.com/weirdpuyppy94
-
-Any support is greatly appreciated.
-I’m currently going through a financially challenging period, and contributions help me continue maintaining and improving this project.
-
-Support is completely optional and has no impact on features or updates.
+MIT License  
+Free to use, modify and share.
+`
