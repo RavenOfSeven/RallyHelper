@@ -42,26 +42,21 @@ local function FormatAgo(ts)
   local m = floor((d - h * 3600) / 60)
   return h .. "h " .. m .. "m ago"
 end
+
 local function EnsureDB()
   RallyHelperDB = RallyHelperDB or {}
   RallyHelperDB.ui = RallyHelperDB.ui or {}
 
   local S = RallyHelperDB.ui
-
   if S.w == nil then S.w = DEFAULT_W end
   if S.h == nil then S.h = DEFAULT_H end
   if S.scale == nil then S.scale = DEFAULT_SCALE end
-
   return S
 end
 
 local function ApplyPfUISkin(frame)
   if not frame or not pfUI or not pfUI.api then return end
-
-  if pfUI.api.SkinFrame then
-    pcall(pfUI.api.SkinFrame, frame)
-  end
-
+  if pfUI.api.SkinFrame then pcall(pfUI.api.SkinFrame, frame) end
   if frame.bgFrame and pfUI.api.SkinBackdrop then
     pcall(pfUI.api.SkinBackdrop, frame.bgFrame)
   end
@@ -84,7 +79,6 @@ local function FadeOutBg(bg, timeToFade, startAlpha, endAlpha)
     bg:SetAlpha(endAlpha or 0.18)
   end
 end
-
 local function ApplyLayout()
   if not ui or not ui.initialized then return end
 
@@ -106,17 +100,27 @@ local function ApplyLayout()
   ui.nefTitle:SetPoint("TOPLEFT", ui, "TOPLEFT", COL2_X, -30)
   ui.nefTitle:SetWidth(COL_W)
 
-  ui.onySW:SetPoint("TOPLEFT", ui, "TOPLEFT", COL1_X, -54); ui.onySW:SetWidth(COL_W)
-  ui.onyOG:SetPoint("TOPLEFT", ui, "TOPLEFT", COL1_X, -70); ui.onyOG:SetWidth(COL_W)
+  ui.onySW:SetPoint("TOPLEFT", ui, "TOPLEFT", COL1_X, -54)
+  ui.onySW:SetWidth(COL_W)
 
-  ui.nefSW:SetPoint("TOPLEFT", ui, "TOPLEFT", COL2_X, -54); ui.nefSW:SetWidth(COL_W)
-  ui.nefOG:SetPoint("TOPLEFT", ui, "TOPLEFT", COL2_X, -70); ui.nefOG:SetWidth(COL_W)
+  ui.onyOG:SetPoint("TOPLEFT", ui, "TOPLEFT", COL1_X, -70)
+  ui.onyOG:SetWidth(COL_W)
 
-  ui.zg:SetPoint("TOPLEFT", ui, "TOPLEFT", PAD, -98);   ui.zg:SetWidth(CONTENT_W)
-  ui.dmf:SetPoint("TOPLEFT", ui, "TOPLEFT", PAD, -114); ui.dmf:SetWidth(CONTENT_W)
+  ui.nefSW:SetPoint("TOPLEFT", ui, "TOPLEFT", COL2_X, -54)
+  ui.nefSW:SetWidth(COL_W)
+
+  ui.nefOG:SetPoint("TOPLEFT", ui, "TOPLEFT", COL2_X, -70)
+  ui.nefOG:SetWidth(COL_W)
+
+  ui.zg:SetPoint("TOPLEFT", ui, "TOPLEFT", PAD, -98)
+  ui.zg:SetWidth(CONTENT_W)
+
+  ui.dmf:SetPoint("TOPLEFT", ui, "TOPLEFT", PAD, -114)
+  ui.dmf:SetWidth(CONTENT_W)
 
   ui.wbIcon:SetPoint("TOPLEFT", ui, "TOPLEFT", PAD + CONTENT_W/2 - 120, -138)
-  ui.wb:SetPoint("TOPLEFT", ui, "TOPLEFT", PAD, -138); ui.wb:SetWidth(CONTENT_W)
+  ui.wb:SetPoint("TOPLEFT", ui, "TOPLEFT", PAD, -138)
+  ui.wb:SetWidth(CONTENT_W)
 end
 
 local function UpdateTexts()
@@ -183,8 +187,6 @@ local function UpdateTexts()
     ui.wb:SetText("Warchief's Blessing: " .. (DB.lastWB and FormatTime(DB.lastWB + 10800 - t) or "ready"))
   end
 end
-
-
 local function CreateUI()
   local S = EnsureDB()
 
@@ -231,7 +233,6 @@ local function CreateUI()
   end
 
   ApplyPfUISkin(ui)
-
   ui:SetScale(S.scale or DEFAULT_SCALE)
 
   if not ui.initialized then
@@ -256,15 +257,18 @@ local function CreateUI()
 
     ui.onyIcon = ui:CreateTexture(nil, "ARTWORK")
     ui.onyIcon:SetTexture(ONY_ICON)
-    ui.onyIcon:SetWidth(16); ui.onyIcon:SetHeight(16)
+    ui.onyIcon:SetWidth(16)
+    ui.onyIcon:SetHeight(16)
 
     ui.nefIcon = ui:CreateTexture(nil, "ARTWORK")
     ui.nefIcon:SetTexture(NEF_ICON)
-    ui.nefIcon:SetWidth(16); ui.nefIcon:SetHeight(16)
+    ui.nefIcon:SetWidth(16)
+    ui.nefIcon:SetHeight(16)
 
     ui.wbIcon = ui:CreateTexture(nil, "ARTWORK")
     ui.wbIcon:SetTexture(WB_ICON)
-    ui.wbIcon:SetWidth(14); ui.wbIcon:SetHeight(14)
+    ui.wbIcon:SetWidth(14)
+    ui.wbIcon:SetHeight(14)
 
     ui.onyTitle = CenterText()
     ui.nefTitle = CenterText()
@@ -314,6 +318,7 @@ local function CreateUI()
       local b = ui.bgFrame
       if b then pcall(FadeInBg, b, 0.15, b:GetAlpha() or 0.18, 1.0) end
     end)
+
     ui:SetScript("OnLeave", function()
       local b = ui.bgFrame
       if b then pcall(FadeOutBg, b, 0.25, b:GetAlpha() or 1.0, 0.18) end
@@ -323,6 +328,7 @@ local function CreateUI()
       local b = ui.bgFrame
       if b then pcall(FadeInBg, b, 0.15, b:GetAlpha() or 0.18, 1.0) end
     end)
+
     ui.titleFrame:SetScript("OnLeave", function()
       local b = ui.bgFrame
       if b then pcall(FadeOutBg, b, 0.25, b:GetAlpha() or 1.0, 0.18) end
@@ -340,7 +346,6 @@ local function CreateUI()
   ApplyLayout()
   UpdateTexts()
 end
-
 local function CreateSizeUI()
   sizeUI = _G["RallyHelperSizeFrame"]
   if not sizeUI then
@@ -382,11 +387,10 @@ local function CreateSizeUI()
       s:SetValueStep(step or 1)
 
       s:SetScript("OnValueChanged", function()
-  if IsLocked() then return end
-  local v = tonumber(arg1) or tonumber(s:GetValue()) or 0
-  setter(v)
-end)
-
+        if IsLocked() then return end
+        local v = tonumber(arg1) or tonumber(s:GetValue()) or 0
+        setter(v)
+      end)
 
       return s
     end
@@ -406,7 +410,6 @@ end)
       sdb.h = val
       ApplyLayout()
     end, 10)
-
 
     sizeUI.scaleLabel = sizeUI:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     sizeUI.scaleLabel:SetPoint("TOP", 0, -118)
@@ -430,10 +433,13 @@ end)
 
   sizeUI:Hide()
 end
-
 RallyHelper_ToggleUI = function()
   if not ui then CreateUI() end
-  if ui:IsShown() then ui:Hide() else ui:Show() end
+  if ui:IsShown() then
+    ui:Hide()
+  else
+    ui:Show()
+  end
 end
 
 RallyHelper_ToggleSizeUI = function()
