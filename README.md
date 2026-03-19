@@ -1,4 +1,5 @@
-# RallyHelper
+<img width="640" height="640" alt="RallyLogo" src="https://github.com/user-attachments/assets/d3519b5c-a137-4a76-ac6e-d33b8a07fffd" />
+
 
 RallyHelper is a lightweight, modern and reliable world buff tracker for Turtle WoW.  
 It focuses on **accuracy**, **verification**, and **zero spam**, making it a clean alternative to older addons like PizzaWorldBuffs.
