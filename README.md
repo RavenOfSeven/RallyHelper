@@ -6,11 +6,6 @@ It focuses on **accuracy**, **verification**, and **zero spam**, making it a cle
 
 ---
 
-## 🙌 Inspiration
-
-RallyHelper was inspired by the long‑standing PizzaWorldBuffs addon, which served the community for many years.  
-This project builds on that idea with a modern, verified and spam‑free approach tailored for Turtle WoW.
-
 
 ## ✨ Features
 
@@ -140,6 +135,13 @@ RallyHelper solves this by using:
 It is designed for **accuracy first**, especially on a server like Turtle WoW where reliability matters.
 
 ---
+
+
+## 🙌 Inspiration
+
+RallyHelper was inspired by the long‑standing PizzaWorldBuffs addon, which served the community for many years.  
+This project builds on that idea with a modern, verified and spam‑free approach tailored for Turtle WoW.
+
 
 ## ❤️ Support
 
