@@ -99,7 +99,7 @@ Reset UI position and settings.
 
 ## 🆕 Changelog
 
-### **v1.0.2 — Stability & Early Adoption Update**
+### **v1.0.4 — Stability & Early Adoption Update**
 
 **Fixes**
 - Resolved a Lua error caused by malformed addon messages in the RallyHelper channel  
