@@ -189,49 +189,48 @@ local function CountUsers()
   return count
 end
 local function HandleYell(npc, msg)
-  if not npc or not msg then return end
+  if type(npc) ~= "string" or type(msg) ~= "string" then return end
 
   local lowerMsg = string.lower(msg)
 
-  if npc == "Major Mattingly" and 
-     (lowerMsg:find("onyxia") or lowerMsg:find("slain") or lowerMsg:find("head")) then
+  local function has(s)
+    return string.find(lowerMsg, s, 1, true) ~= nil
+  end
+
+  if npc == "Major Mattingly" and (has("onyxia") or has("slain") or has("head")) then
     SendEvent("ONY_A")
     return
   end
 
-  if npc == "Field Marshal Afrasiabi" and 
-     (lowerMsg:find("blackrock") or lowerMsg:find("nefarian") or lowerMsg:find("slain")) then
+  if npc == "Field Marshal Afrasiabi" and (has("blackrock") or has("nefarian") or has("slain")) then
     SendEvent("NEF_A")
     return
   end
 
-  if npc == "High Overlord Saurfang" and 
-     (lowerMsg:find("onyxia") or lowerMsg:find("slain")) then
+  if npc == "High Overlord Saurfang" and (has("onyxia") or has("slain")) then
     SendEvent("ONY_H")
     return
   end
 
   if npc == "Overlord Runthak" then
-    if lowerMsg:find("onyxia") or lowerMsg:find("brood mother") then
+    if has("onyxia") or has("brood mother") then
       SendEvent("ONY_H")
       return
     end
-    if lowerMsg:find("blackrock") or lowerMsg:find("nefarian") then
+    if has("blackrock") or has("nefarian") then
       SendEvent("NEF_H")
       return
     end
     return
   end
 
-  if npc == "Molthor" and 
-     (lowerMsg:find("hakkar") or lowerMsg:find("slayer of hakkar")) then
+  if npc == "Molthor" and (has("hakkar") or has("slayer of hakkar")) then
     AcceptEvent("ZG", time())
     SendEvent("ZG")
     return
   end
 
-  if npc == "Thrall" and 
-     (lowerMsg:find("warchief") or lowerMsg:find("rend")) then
+  if npc == "Thrall" and (has("warchief") or has("rend")) then
     SendEvent("WB", "Orgrimmar")
     return
   end
