@@ -188,7 +188,6 @@ local function CountUsers()
   end
   return count
 end
-
 local function HandleYell(npc, msg)
   if not npc or not msg then return end
 
@@ -295,7 +294,6 @@ SlashCmdList["RALLYHELPER"] = function(msg)
     end
   end
 end
-
 local function CreateMinimapButton()
   if RallyHelperMinimapButton then return end
 
@@ -354,7 +352,9 @@ local function CreateMinimapButton()
     GameTooltip:Show()
   end)
 
-  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  b:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+  end)
 
   b:SetScript("OnMouseDown", function()
     if arg1 ~= "LeftButton" then return end
@@ -377,23 +377,41 @@ local function CreateMinimapButton()
     UpdatePos()
   end)
 
-  b:SetScript("OnMouseUp", function() b.isDown = false end)
+  b:SetScript("OnMouseUp", function()
+    b.isDown = false
+  end)
 
   b:SetScript("OnClick", function()
-    if arg1 == "RightButton" then PrintStatus(); return end
-    if IsAltKeyDown() then
-      if b.didDrag then b.didDrag = false; return end
-      if type(RallyHelper_ToggleSizeUI) == "function" then RallyHelper_ToggleSizeUI() end
+    if arg1 == "RightButton" then
+      PrintStatus()
       return
     end
-    if IsShiftKeyDown() then ShareTimersToChat(); return end
-    if type(RallyHelper_ToggleUI) == "function" then RallyHelper_ToggleUI() end
+    if IsAltKeyDown() then
+      if b.didDrag then
+        b.didDrag = false
+        return
+      end
+      if type(RallyHelper_ToggleSizeUI) == "function" then
+        RallyHelper_ToggleSizeUI()
+      end
+      return
+    end
+    if IsShiftKeyDown() then
+      ShareTimersToChat()
+      return
+    end
+    if type(RallyHelper_ToggleUI) == "function" then
+      RallyHelper_ToggleUI()
+    end
   end)
 
   UpdatePos()
-  if DB.minimap.hide then b:Hide() else b:Show() end
+  if DB.minimap.hide then
+    b:Hide()
+  else
+    b:Show()
+  end
 end
-
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("CHAT_MSG_CHANNEL")
