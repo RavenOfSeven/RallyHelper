@@ -193,7 +193,6 @@ local function HandleChannel(msg, channel)
 
   RH_Users[sender] = time()
 
-  -- Request: jemand fragt nach Timern
   if ev == "REQ" then
     RespondToRequest()
     return
@@ -201,9 +200,8 @@ local function HandleChannel(msg, channel)
 
   local required = RH_VERIFY_REQUIRED
 
-  -- TIMER_* sind Sync-Antworten und brauchen 5 Bestätigungen
   if strsub(ev, 1, 6) == "TIMER_" then
-    ev = strsub(ev, 8) -- "TIMER_ONY_H" -> "ONY_H"
+    ev = strsub(ev, 8) 
     required = RH_VERIFY_REQUIRED_REQUEST
   end
 
