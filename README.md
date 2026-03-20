@@ -97,67 +97,87 @@ Reset UI position and settings.
 
 ---
 
----
+# 📝 **RallyHelper 1.2 – Changelog**
 
-# **RallyHelper 1.1.0 – Changelog**
+## 🚀 New Features
 
-### **✨ New Features**
-- **Fully redesigned UI**
-  - Cleaner layout with improved readability  
-  - Color‑coded timers for faster recognition  
-  - Updated icons for Onyxia, Nefarian, and Warchief’s Blessing  
-- **New Size Configuration Window**
-  - Adjust width, height, and scale  
-  - Live preview while dragging sliders  
-  - Perfect compatibility with pfUI  
-- **Improved Minimap Button**
-  - **Alt + Drag** to reposition  
-  - **Shift + Left‑Click** to share timers in chat  
-  - **Right‑Click** for quick status output  
-  - **Alt + Left‑Click** opens the size configuration window  
+### **✔ Timer Request System (REQ / TIMER\_*)**
+RallyHelper can now actively request missing timers from other players in the channel.
 
-### **🔧 Improvements**
-- Complete internal code restructuring (Core + UI)  
-- More reliable world buff detection and verification  
-- Improved Darkmoon Faire detection  
-- Optimized OnUpdate loop (reduced CPU usage)  
-- Better pfUI skin integration  
-- Cleaner SavedVariables structure  
-- More robust channel handling and throttling  
+- New event type: `REQ`
+- Players with confirmed timers automatically respond with `TIMER_*` events  
+- Supports Ony, Nef, ZG, DMF, and Warchief’s Blessing  
+- `/rally request` command added  
+- Automatic timer request on login
 
-### **🐞 Bug Fixes**
-- Fixed Lua syntax issues caused by duplicated `end` blocks  
-- Fixed minimap button position not saving correctly  
-- Fixed UI flickering on mouseover  
-- Fixed incorrect or missing DMF zone display  
-- Fixed occasional “unknown” timer values  
-- Fixed issues on first load after installation  
+### **✔ Secure 5‑Player Verification for Sync Events**
+To prevent manipulation or incorrect data, TIMER‑based sync events now require **5 independent confirmations** before being accepted.
 
-### **📦 Other**
-- Fully Vanilla‑Lua compatible  
-- Verified working on Turtle WoW 1.17+  
-- Updated README  
-- Codebase prepared for future modules and expansions  
+- Yell‑based events → require 2 confirmations  
+- Sync‑based events → require 5 confirmations  
+- Prevents fake timers, ghost timers, and single‑source manipulation  
+- Ensures only widely‑agreed data is adopted
 
+### **✔ Defensive String Handling**
+RallyHelper now uses safe local copies of Lua string functions:
+
+- `strmatch`
+- `strfind`
+- `strlower`
+- `strsub`
+
+This protects the addon from other addons that overwrite or break global string functions.
 
 ---
 
-## ❓ Why RallyHelper?
+## 🔧 Improvements
 
-Older addons like PizzaWorldBuffs accept **any** message from **any** source, which leads to:
-- false timers  
-- manipulated timestamps  
-- channel spam  
-- inconsistent data  
+- More robust channel parsing and event handling  
+- Cleaner unconfirmed‑event tracking  
+- More reliable UI updates after confirmed events  
+- Improved DMF detection logic  
+- Sanitized outgoing messages to avoid malformed data  
+- Better resilience in “hostile” addon environments
 
-RallyHelper solves this by using:
-- verification  
-- clean communication  
-- modern Lua patterns  
-- zero spam  
-- robust parsing  
+---
 
-It is designed for **accuracy first**, especially on a server like Turtle WoW where reliability matters.
+## 🐛 Bug Fixes
+
+- Fixed issues caused by addons that modify `string.lower` or `string.find`  
+- Fixed rare cases where ZG events were not stored correctly  
+- Fixed UI not updating after certain confirm events  
+- Fixed minimap button drag behavior on unusual UI scales
+
+---
+
+## ⚠️ Known Incompatibility: LazyPig
+
+Some users have reported that **LazyPig** interferes with RallyHelper’s functionality.
+
+### Observed symptoms:
+- Timers not being shared  
+- Confirm events not being processed  
+- REQ/TIMER sync not working reliably  
+
+### Possible cause:
+LazyPig modifies or hooks into:
+
+- global `string.*` functions  
+- chat event handlers  
+- channel parsing logic  
+
+These modifications can disrupt RallyHelper’s event parsing and verification logic.
+
+### Recommendation:
+If RallyHelper does not synchronize timers correctly, try **disabling LazyPig**.  
+This issue may be caused either by LazyPig itself or by the combination of LazyPig’s hooks with RallyHelper’s new defensive code.
+
+---
+
+## ❤️ Final Notes
+RallyHelper remains intentionally lightweight, transparent, and community‑friendly.  
+All new features are designed to be safe, predictable, and resistant to manipulation — without relying on server time tricks or hidden logic.
+
 
 ---
 
