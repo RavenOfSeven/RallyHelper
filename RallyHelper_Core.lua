@@ -184,12 +184,19 @@ local function HandleChannel(msg, channel)
   if type(msg) ~= "string" then return end
   if not msg or msg == "" then return end
 
-  local ev, ts, sender, zone = strmatch(msg, "^([^|]+)|([^|]+)|([^|]+)|?(.*)$")
-  if not ev or not ts or not sender then return end
+  local parts = {}
+for v in string.gmatch(msg, "([^|]*)|?") do
+    table.insert(parts, v)
+end
 
-  ts = tonumber(ts)
-  if not ts then return end
-  if zone == "" then zone = nil end
+local ev     = parts[1]
+local ts     = tonumber(parts[2])
+local sender = parts[3]
+local zone   = parts[4]
+if zone == "" then zone = nil end
+
+if not ev or not ts or not sender then return end
+
 
   RH_Users[sender] = time()
 
