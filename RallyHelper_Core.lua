@@ -1,3 +1,38 @@
+local function RH_ForceJoinChannel()
+  local channels = { GetChannelList() }
+  local isIn = false
+
+  for _, ch in next, channels do
+    if string.lower(ch) == "lft" then
+      isIn = true
+      break
+    end
+  end
+
+  if not isIn then
+    JoinChannelByName("LFT")
+  end
+end
+
+local RH_ChannelJoinDelay = CreateFrame("Frame")
+RH_ChannelJoinDelay:Hide()
+
+RH_ChannelJoinDelay:SetScript("OnShow", function()
+  this.startTime = GetTime()
+end)
+
+RH_ChannelJoinDelay:SetScript("OnHide", function()
+  RH_ForceJoinChannel()
+end)
+
+RH_ChannelJoinDelay:SetScript("OnUpdate", function()
+  local delay = 15
+  if GetTime() >= this.startTime + delay then
+    RH_ChannelJoinDelay:Hide()
+  end
+end)
+
+
 local RH_CHANNEL        = "LFT"
 local RH_VERIFY_WINDOW  = 30
 local RH_VERIFY_REQUIRED = 2
@@ -71,8 +106,19 @@ end
 local function SendEvent(ev, zone)
   if not CanSend(ev) then return end
 
-  local id = GetChannelName(RH_CHANNEL)
-  if not id or id == 0 then return end
+  local channels = { GetChannelList() }
+  local id = nil
+
+  for i = 1, #channels, 2 do
+    local index = channels[i]
+    local name  = channels[i+1]
+    if string.lower(name) == string.lower(RH_CHANNEL) then
+      id = index
+      break
+    end
+  end
+
+  if not id then return end
 
   local msg = ev .. "|" .. time() .. "|" .. (UnitName("player") or "?") .. "|" .. (zone or "")
   SendChatMessage(SanitizeChat(msg), "CHANNEL", nil, id)
@@ -124,7 +170,7 @@ local function AcceptEvent(ev, ts, zone)
   if ev == "WB"    then DB.lastWB = ts; DB.lastWBZone = zone end
 
   RH_Unconfirmed[ev] = nil
-
+  DEFAULT_CHAT_FRAME:AddMessage("RH DEBUG: confirmed " .. ev)
   if DB.toast then
     DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RallyHelper]|r " .. ev .. " confirmed")
   end
@@ -135,6 +181,7 @@ local function AcceptEvent(ev, ts, zone)
 end
 
 local function AddUnconfirmedEvent(ev, ts, sender, zone)
+  DEFAULT_CHAT_FRAME:AddMessage("RH DEBUG: unconfirmed " .. ev .. " from " .. sender)
   RH_Unconfirmed[ev] = {
     ts = ts,
     sender = sender,
@@ -156,7 +203,6 @@ local function RespondToRequest()
   if DB.lastWB then SendEvent("TIMER_WB", DB.lastWBZone or "") end
 end
 
--- Vanilla-sicheres Splitten
 local function SplitMessage(msg)
   local a, b, c, d = "", "", "", ""
   local p1 = string.find(msg, "|")
@@ -281,6 +327,16 @@ local function TryDMF()
     SendEvent("DMF", SafeZoneText())
   end
 end
+
+local function RH_TrySendREQ()
+  local id = GetChannelName(RH_CHANNEL)
+  if id and id > 0 then
+    SendEvent("REQ")
+  else
+    C_Timer.After(1, RH_TrySendREQ)
+  end
+end
+
 
 local function CountUsers()
   local now = time()
@@ -474,13 +530,36 @@ f:RegisterEvent("GOSSIP_SHOW")
 f:RegisterEvent("QUEST_GREETING")
 f:RegisterEvent("MERCHANT_SHOW")
 
+local function RH_TrySendREQ()
+  local channels = { GetChannelList() }
+  local id = nil
+
+  for i = 1, #channels, 2 do
+    local index = channels[i]
+    local name  = channels[i+1]
+    if string.lower(name) == string.lower(RH_CHANNEL) then
+      id = index
+      break
+    end
+  end
+
+  if id then
+    SendEvent("REQ")
+  else
+    C_Timer.After(1, RH_TrySendREQ)
+  end
+end
+
+
 f:SetScript("OnEvent", function()
   if event == "PLAYER_LOGIN" then
     DB = RallyHelperDB or {}
     RallyHelperDB = DB
+	RH_ChannelJoinDelay:Show()
 
     DB.version = DB.version or 0
     if DB.version < DB_VERSION then
+
       DB.ui = DB.ui or {}
       DB.minimap = DB.minimap or {}
       DB.locked = false
@@ -488,22 +567,26 @@ f:SetScript("OnEvent", function()
       DB.version = DB_VERSION
     end
 
-    SendEvent("REQ")
+    C_Timer.After(1, RH_TrySendREQ)
     CreateMinimapButton()
-	CreateUI()
+    CreateUI()
 
-elseif event == "CHAT_MSG_CHANNEL" then
+  elseif event == "CHAT_MSG_CHANNEL" then
     local ch = string.lower(arg4 or "")
     if not string.find(ch, "lft") then return end
     HandleChannel(arg1, ch)
-
-
-
 
   elseif event == "CHAT_MSG_MONSTER_YELL" then
     HandleYell(arg2, arg1)
 
   elseif event == "GOSSIP_SHOW" or event == "QUEST_GREETING" or event == "MERCHANT_SHOW" then
     TryDMF()
+  end
+end)
+ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL", function(_, _, msg, _, _, _, _, _, channelName)
+  if string.find(string.lower(channelName or ""), "lft") then
+    if not string.find(msg, "|") then
+      return true
+    end
   end
 end)
