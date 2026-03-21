@@ -79,6 +79,7 @@ local function FadeOutBg(bg, timeToFade, startAlpha, endAlpha)
     bg:SetAlpha(endAlpha or 0.18)
   end
 end
+
 local function ApplyLayout()
   if not ui or not ui.initialized then return end
 
@@ -346,6 +347,7 @@ local function CreateUI()
   ApplyLayout()
   UpdateTexts()
 end
+_G.CreateUI = CreateUI
 local function CreateSizeUI()
   sizeUI = _G["RallyHelperSizeFrame"]
   if not sizeUI then
@@ -433,6 +435,7 @@ local function CreateSizeUI()
 
   sizeUI:Hide()
 end
+
 RallyHelper_ToggleUI = function()
   if not ui then CreateUI() end
   if ui:IsShown() then
