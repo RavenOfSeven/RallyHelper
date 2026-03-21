@@ -109,13 +109,16 @@ local function SendEvent(ev, zone)
   local channels = { GetChannelList() }
   local id = nil
 
-  for i = 1, #channels, 2 do
+  local count = table.getn(channels)
+  local i = 1
+  while i <= count do
     local index = channels[i]
     local name  = channels[i+1]
-    if string.lower(name) == string.lower(RH_CHANNEL) then
+    if name and string.lower(name) == string.lower(RH_CHANNEL) then
       id = index
       break
     end
+    i = i + 2
   end
 
   if not id then return end
@@ -123,6 +126,7 @@ local function SendEvent(ev, zone)
   local msg = ev .. "|" .. time() .. "|" .. (UnitName("player") or "?") .. "|" .. (zone or "")
   SendChatMessage(SanitizeChat(msg), "CHANNEL", nil, id)
 end
+
 
 
 local function Prune(list)
