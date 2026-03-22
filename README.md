@@ -97,7 +97,7 @@ Reset UI position and settings.
 
 ---
 
-# 📝 **RallyHelper 1.2 – Changelog**
+# 📝 **RallyHelper 1.3 – Changelog**
 
 ## 🚀 New Features
 
