@@ -97,6 +97,12 @@ Reset UI position and settings.
 
 ---
 
+## 📷 Screenshot
+
+![Screenshot RallyHelper](https://github.com/user-attachments/assets/3b09776f-a457-496e-91e1-aee7f5766dcb)
+
+---
+
 # 🧾 **RallyHelper – Changelog**
 
 ## **v1.3.6 – Stability & Vanilla Compatibility Update**  
