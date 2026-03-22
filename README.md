@@ -97,56 +97,71 @@ Reset UI position and settings.
 
 ---
 
-# 📝 **RallyHelper 1.3 – Changelog**
+# 🧾 **RallyHelper – Changelog**
 
-## 🚀 New Features
+## **v1.3.5 – Stability & Vanilla Compatibility Update**  
+**Release:** 2026‑03‑22
 
-### **✔ Timer Request System (REQ / TIMER\_*)**
-RallyHelper can now actively request missing timers from other players in the channel.
+### 🔧 **Fixes**
+- Fixed a critical issue where `SetVerticalScroll(offset)` caused UI errors when opening the Unconfirmed window.  
+  Root cause: Slider events fired before the ScrollFrame was fully initialized.
+- Fixed a syntax error (`end expected near <eof>`) caused by a missing `end` in `CreateUnconfirmedUI()`.
+- Fixed `RallyHelper_ToggleUI` being `nil` due to the file not loading past the syntax error.
+- Fixed Vanilla/Turtle incompatibility in `CreateSizeUI()` (`SetPoint("CENTER")` → now uses full 5‑argument form).
+- Fixed potential crash when the Unconfirmed list was empty (`i == 0`) by clamping slider values.
+- Fixed negative scroll offsets in Vanilla by enforcing safe clamping in the slider handler.
+- Fixed race condition where the ScrollFrame could be accessed before its ScrollChild existed.
 
-- New event type: `REQ`
-- Players with confirmed timers automatically respond with `TIMER_*` events  
-- Supports Ony, Nef, ZG, DMF, and Warchief’s Blessing  
-- `/rally request` command added  
-- Automatic timer request on login
+### 🛡️ **Stability Improvements**
+- Added fully defensive slider logic:
+  - ignores nil offsets  
+  - clamps negative values  
+  - checks ScrollFrame + ScrollChild before scrolling  
+  - prevents all known Vanilla scroll crashes
+- MouseWheel handler now safely checks for slider existence.
+- Unconfirmed UI now loads reliably even with zero events.
+- Removed duplicate local variables and cleaned up function structure.
 
-### **✔ Secure 5‑Player Verification for Sync Events**
-To prevent manipulation or incorrect data, TIMER‑based sync events now require **5 independent confirmations** before being accepted.
-
-- Yell‑based events → require 2 confirmations  
-- Sync‑based events → require 5 confirmations  
-- Prevents fake timers, ghost timers, and single‑source manipulation  
-- Ensures only widely‑agreed data is adopted
-
-### **✔ Defensive String Handling**
-RallyHelper now uses safe local copies of Lua string functions:
-
-- `strmatch`
-- `strfind`
-- `strlower`
-- `strsub`
-
-This protects the addon from other addons that overwrite or break global string functions.
-
----
-
-## 🔧 Improvements
-
-- More robust channel parsing and event handling  
-- Cleaner unconfirmed‑event tracking  
-- More reliable UI updates after confirmed events  
-- Improved DMF detection logic  
-- Sanitized outgoing messages to avoid malformed data  
-- Better resilience in “hostile” addon environments
+### 🧹 **Code Cleanup**
+- Removed duplicate `local sizeUI` declaration.
+- Removed stray or duplicated `end` blocks.
+- Improved indentation and readability.
+- Ensured ScrollFrame initialization order is fully Vanilla‑safe.
 
 ---
 
-## 🐛 Bug Fixes
+## **v1.3.0 – Unconfirmed UI Rework**
 
-- Fixed issues caused by addons that modify `string.lower` or `string.find`  
-- Fixed rare cases where ZG events were not stored correctly  
-- Fixed UI not updating after certain confirm events  
-- Fixed minimap button drag behavior on unusual UI scales
+### ✨ **New**
+- Added a complete Unconfirmed Events UI:
+  - ScrollFrame with slider  
+  - Filter checkboxes (Alliance, Horde, ZG, WB)  
+  - Dynamic event list  
+  - Clean pfUI‑compatible layout
+- Added safer handling for unconfirmed world buff events.
+
+### 🔧 **Fixes**
+- Events now sort correctly by timestamp.
+- Enforced a maximum of 20 entries to prevent overflow.
+- Improved layout consistency and text alignment.
+
+---
+
+## **v1.2.0 – Sync & RHGlobal Stabilization**
+
+### ✨ **New**
+- Introduced `RHGlobal.Unconfirmed` as a persistent global storage.
+- Added support for solo players without LFT channel.
+- Added dedicated `RallyDebug` channel for clean debugging.
+
+### 🔧 **Fixes**
+- Resolved sync issues caused by TurtleWoW system channels.
+- Improved event parsing and validation.
+- Ensured events are received even when not in LFT.
+
+### 🧹 **Cleanup**
+- Removed outdated sync logic.
+- Unified event handling and storage.
 
 ---
 
