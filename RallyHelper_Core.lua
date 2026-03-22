@@ -358,27 +358,31 @@ local function HandleYell(npc, msg)
     return string.find(lowerMsg, s, 1, true) ~= nil
   end
 
-  if npc == "Major Mattingly" and (has("onyxia") or has("slain") or has("head")) then
+  if npc == "Major Mattingly" and (has("onyxia") or has("head")) then
     SendEvent("ONY_A")
     return
   end
 
-  if npc == "Field Marshal Afrasiabi" and (has("blackrock") or has("nefarian") or has("slain")) then
+  if npc == "Field Marshal Afrasiabi" and (has("nefarian") or has("blackrock")) then
     SendEvent("NEF_A")
     return
   end
 
-  if npc == "High Overlord Saurfang" and (has("onyxia") or has("slain")) then
+  if npc == "High Overlord Saurfang" and (has("onyxia") or has("brood mother")) then
     SendEvent("ONY_H")
     return
   end
 
+  if npc == "High Overlord Saurfang" and (has("nefarian") or has("blackrock")) then
+    SendEvent("NEF_H")
+    return
+  end
   if npc == "Overlord Runthak" then
     if has("onyxia") or has("brood mother") then
       SendEvent("ONY_H")
       return
     end
-    if has("blackrock") or has("nefarian") then
+    if has("nefarian") or has("blackrock") then
       SendEvent("NEF_H")
       return
     end
@@ -396,6 +400,7 @@ local function HandleYell(npc, msg)
     return
   end
 end
+
 
 local DMF_NPCS = {
   ["Sayge"] = true,
