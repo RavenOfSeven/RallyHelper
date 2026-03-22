@@ -233,21 +233,217 @@ function CreateUI()
   ApplyPfUISkin(ui)
 end
 
-function CreateSizeUI()
-  local function CreateFS(parent, size, r, g, b)
-    local f = parent:CreateFontString(nil, "OVERLAY")
-    f:SetFont("Fonts\\FRIZQT__.TTF", size or 12, "OUTLINE")
-    if r then f:SetTextColor(r, g, b) end
-    f:SetJustifyH("LEFT")
-    return f
+local unconfUI
+
+RallyHelperDB = RallyHelperDB or {}
+RallyHelperDB.unconfFilter = RallyHelperDB.unconfFilter or {
+  ALLIANCE = true,
+  HORDE = true,
+  ZG = true,
+  WB = true,
+}
+
+local FILTER = RallyHelperDB.unconfFilter
+local MAX_UNCONFIRMED = 20
+
+function CreateUnconfirmedUI()
+  if unconfUI then return end
+
+  unconfUI = CreateFrame("Frame", "RallyHelperUnconfirmedFrame", UIParent)
+  unconfUI:SetWidth(320)
+  unconfUI:SetHeight(240)
+  unconfUI:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+  unconfUI:SetFrameStrata("DIALOG")
+  unconfUI:SetMovable(true)
+  unconfUI:EnableMouse(true)
+  unconfUI:RegisterForDrag("LeftButton")
+  unconfUI:SetScript("OnDragStart", function() unconfUI:StartMoving() end)
+  unconfUI:SetScript("OnDragStop", function() unconfUI:StopMovingOrSizing() end)
+
+  unconfUI:SetBackdrop({
+    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    tile = true, tileSize = 16, edgeSize = 16,
+    insets = { left=4, right=4, top=4, bottom=4 }
+  })
+  unconfUI:SetBackdropColor(0, 0, 0, 0.35)
+
+  local function AddCheck(label, key, x)
+    local cb = CreateFrame("CheckButton", nil, unconfUI, "UICheckButtonTemplate")
+    cb:SetPoint("TOPLEFT", unconfUI, "TOPLEFT", x, -6)
+    cb:SetChecked(FILTER[key])
+
+    cb.text = cb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    cb.text:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+    cb.text:SetText(label)
+
+    cb:SetScript("OnClick", function()
+      FILTER[key] = cb:GetChecked()
+      RallyHelper_UpdateUnconfirmed()
+    end)
   end
 
+  AddCheck("Alliance", "ALLIANCE", 10)
+  AddCheck("Horde",    "HORDE",    100)
+  AddCheck("ZG",       "ZG",       180)
+  AddCheck("Warchief", "WB",       240)
+
+  local scroll = CreateFrame("ScrollFrame", nil, unconfUI)
+  scroll:SetPoint("TOPLEFT", unconfUI, "TOPLEFT", 8, -32)
+  scroll:SetPoint("BOTTOMRIGHT", unconfUI, "BOTTOMRIGHT", -28, 8)
+
+  local child = CreateFrame("Frame", nil, scroll)
+  child:SetWidth(280)
+  child:SetHeight(600)
+  scroll:SetScrollChild(child)
+
+  unconfUI.child = child
+  unconfUI.scroll = scroll
+
+  local slider = CreateFrame("Slider", nil, unconfUI, "UIPanelScrollBarTemplate")
+  slider:SetPoint("TOPRIGHT", unconfUI, "TOPRIGHT", -4, -40)
+  slider:SetPoint("BOTTOMRIGHT", unconfUI, "BOTTOMRIGHT", -4, 20)
+  slider:SetMinMaxValues(0, 200)
+  slider:SetValueStep(10)
+  slider:SetWidth(16)
+
+  slider:SetScript("OnValueChanged", function(_, v)
+  if not unconfUI.scroll then return end
+  local child = unconfUI.scroll:GetScrollChild()
+  if not child then return end
+  if v == nil then return end
+  if v < 0 then v = 0 end
+  unconfUI.scroll:SetVerticalScroll(v)
+end)
+
+
+  scroll:SetScript("OnMouseWheel", function(_, delta)
+  if not unconfUI.slider then return end
+  local new = unconfUI.slider:GetValue() - delta * 20
+  if new < 0 then new = 0 end
+  unconfUI.slider:SetValue(new)
+end)
+  unconfUI.slider = slider
+end
+
+
+
+
+function RallyHelper_UpdateUnconfirmed()
+  if not unconfUI then return end
+
+  local child = unconfUI.child
+  if not child then return end
+
+  for _, f in ipairs(child.lines or {}) do f:Hide() end
+  child.lines = child.lines or {}
+
+  local list = {}
+  for ev, data in pairs(RHGlobal.Unconfirmed) do
+    table.insert(list, { ev = ev, ts = data.ts, zone = data.zone })
+  end
+
+  table.sort(list, function(a, b) return a.ts > b.ts end)
+
+  while table.getn(list) > MAX_UNCONFIRMED do
+    table.remove(list)
+  end
+
+  local i = 0
+
+  for _, entry in ipairs(list) do
+    local ev = entry.ev
+    local ts = entry.ts
+
+    local label, color, category
+
+    if ev == "ONY_A" then
+      label = "Ony_Alliance"
+      color = "|cff3399ff"
+      category = "ALLIANCE"
+    elseif ev == "NEF_A" then
+      label = "Nef_Alliance"
+      color = "|cff3399ff"
+      category = "ALLIANCE"
+    elseif ev == "ONY_H" then
+      label = "Ony_Horde"
+      color = "|cffff3333"
+      category = "HORDE"
+    elseif ev == "NEF_H" then
+      label = "Nef_Horde"
+      color = "|cffff3333"
+      category = "HORDE"
+    elseif ev == "ZG" then
+      label = "ZG"
+      color = "|cff33ff33"
+      category = "ZG"
+    elseif ev == "WB" then
+      label = "Warchief"
+      color = "|cffffaa33"
+      category = "WB"
+    else
+      label = ev
+      color = "|cFFAAAAAA"
+      category = "OTHER"
+    end
+
+    if FILTER[category] then
+      i = i + 1
+
+      local line = child.lines[i]
+      if not line then
+        line = child:CreateFontString(nil, "OVERLAY")
+        line:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+        line:SetJustifyH("LEFT")
+        child.lines[i] = line
+      end
+
+      local count = 0
+      if verify and verify[ev] then
+        count = table.getn(verify[ev])
+      end
+
+      line:SetPoint("TOPLEFT", child, "TOPLEFT", 0, - (i - 1) * 18)
+
+      line:SetText(
+        color .. label .. "|r" ..
+        "  |cFFAAAAAA" .. count .. "/2 Unconfirmed  " .. FormatAgo(ts) .. "|r"
+      )
+      line:Show()
+    end
+  end
+
+  if i == 0 then
+    unconfUI.slider:SetMinMaxValues(0, 0)
+    unconfUI.slider:SetValue(0)
+    return
+  end
+
+  unconfUI.slider:SetMinMaxValues(0, math.max(0, i * 18 - 180))
+end
+
+
+
+function RallyHelper_ToggleUnconfirmed()
+  if not unconfUI then CreateUnconfirmedUI() end
+  if unconfUI:IsShown() then
+    unconfUI:Hide()
+  else
+    RallyHelper_UpdateUnconfirmed()
+    unconfUI:Show()
+  end
+end
+
+local sizeUI
+
+function CreateSizeUI()
   if sizeUI then return end
+
+  local S = EnsureDB()
 
   sizeUI = CreateFrame("Frame", "RallyHelperSizeFrame", UIParent)
   sizeUI:SetWidth(340)
   sizeUI:SetHeight(240)
-  sizeUI:ClearAllPoints()
   sizeUI:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
   sizeUI:SetFrameStrata("DIALOG")
 
@@ -263,6 +459,14 @@ function CreateSizeUI()
   sizeUI:RegisterForDrag("LeftButton")
   sizeUI:SetScript("OnDragStart", function() sizeUI:StartMoving() end)
   sizeUI:SetScript("OnDragStop", function() sizeUI:StopMovingOrSizing() end)
+
+  local function CreateFS(parent, size, r, g, b)
+    local f = parent:CreateFontString(nil, "OVERLAY")
+    f:SetFont("Fonts\\FRIZQT__.TTF", size or 12, "OUTLINE")
+    if r then f:SetTextColor(r, g, b) end
+    f:SetJustifyH("LEFT")
+    return f
+  end
 
   local title = sizeUI:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   title:SetPoint("TOP", 0, -15)
@@ -280,12 +484,11 @@ function CreateSizeUI()
 
   widthSlider:SetScript("OnValueChanged", function()
     local v = floor(widthSlider:GetValue() + 0.5)
-    local S = EnsureDB()
     S.w = v
-    if ui then ui:SetWidth(v) ApplyLayout() end
+    if ui then ui:SetWidth(v); ApplyLayout() end
   end)
 
-  local heightText = sizeUI:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  local heightText = CreateFS(sizeUI, 14)
   heightText:SetPoint("TOPLEFT", 20, -110)
   heightText:SetText("Height")
 
@@ -297,12 +500,11 @@ function CreateSizeUI()
 
   heightSlider:SetScript("OnValueChanged", function()
     local v = floor(heightSlider:GetValue() + 0.5)
-    local S = EnsureDB()
     S.h = v
-    if ui then ui:SetHeight(v) ApplyLayout() end
+    if ui then ui:SetHeight(v); ApplyLayout() end
   end)
 
-  local scaleText = sizeUI:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  local scaleText = CreateFS(sizeUI, 14)
   scaleText:SetPoint("TOPLEFT", 20, -160)
   scaleText:SetText("Scale")
 
@@ -314,7 +516,6 @@ function CreateSizeUI()
 
   scaleSlider:SetScript("OnValueChanged", function()
     local v = floor(scaleSlider:GetValue() * 100 + 0.5) / 100
-    local S = EnsureDB()
     S.scale = v
     if ui then ui:SetScale(v) end
   end)
@@ -326,7 +527,6 @@ function CreateSizeUI()
   close:SetText("Close")
   close:SetScript("OnClick", function() sizeUI:Hide() end)
 
-  local S = EnsureDB()
   widthSlider:SetValue(S.w or DEFAULT_W)
   heightSlider:SetValue(S.h or DEFAULT_H)
   scaleSlider:SetValue(S.scale or DEFAULT_SCALE)
