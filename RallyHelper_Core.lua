@@ -406,37 +406,57 @@ _G.RH_TestPlay = function(ev) pcall(function() PlayBuffSoundFor(ev) end) end
 
 SLASH_RALLYSOUND1 = "/rallysound"
 SlashCmdList["RALLYSOUND"] = function(input)
-  local msg = input or ""
-  local cmd, arg = msg:match("^(%S*)%s*(.-)$")
-  cmd = cmd and cmd:lower() or ""
+  local txt = input or ""
+  local cmd, arg = strmatch(txt, "^(%S*)%s*(.-)$")
+  cmd = cmd and strlower(cmd) or ""
+
+  DB.rhSounds = DB.rhSounds or {}
+  DB.rhSounds.files = DB.rhSounds.files or {}
 
   if cmd == "on" then
     DB.rhSounds.enabled = true
     DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Sounds enabled")
-  elseif cmd == "off" then
+    return
+  end
+
+  if cmd == "off" then
     DB.rhSounds.enabled = false
     DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Sounds disabled")
-  elseif cmd == "set" and arg and arg ~= "" then
-    local ev, path = arg:match("^(%S+)%s+(.+)$")
-    if ev and path and DB.rhSounds.files then
-      DB.rhSounds.files[ev] = path
-      DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Set sound for "..ev)
+    return
+  end
+
+  if cmd == "set" then
+    if arg and arg ~= "" then
+      local ev, path = strmatch(arg, "^(%S+)%s+(.+)$")
+      if ev and path then
+        DB.rhSounds.files[ev] = path
+        DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Set sound for "..ev)
+      else
+        DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallysound set <EVENT> <path>")
+      end
     else
       DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallysound set <EVENT> <path>")
     end
-  elseif cmd == "volume" and arg ~= "" then
-    local v = tonumber(arg)
-    if v and v >= 0 and v <= 100 then
-      DB.rhSounds.volume = v
-      DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Sound volume set to "..tostring(v))
+    return
+  end
+
+  if cmd == "volume" then
+    if arg and arg ~= "" then
+      local v = tonumber(arg)
+      if v and v >= 0 and v <= 100 then
+        DB.rhSounds.volume = v
+        DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Sound volume set to "..tostring(v))
+      else
+        DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallysound volume <0-100>")
+      end
     else
       DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallysound volume <0-100>")
     end
-  else
-    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Commands: on, off, set <EVENT> <path>, volume <0-100>")
+    return
   end
-end
 
+  DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Commands: on, off, set <EVENT> <path>, volume <0-100>")
+end
 
 local function InjectSoundCheckbox()
   if not DB then return end
@@ -448,8 +468,9 @@ local function InjectSoundCheckbox()
   cb.text = cb:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
   cb.text:SetPoint("LEFT", cb, "RIGHT", 4, 0)
   cb.text:SetText("Play buff sounds")
-  cb:SetChecked(DB.rhSounds.enabled)
+  cb:SetChecked(DB.rhSounds and DB.rhSounds.enabled)
   cb:SetScript("OnClick", function(self)
+    DB.rhSounds = DB.rhSounds or {}
     DB.rhSounds.enabled = self:GetChecked()
   end)
 
@@ -460,7 +481,7 @@ ScheduleAfter(0.2, InjectSoundCheckbox)
 
 SLASH_RALLYTOAST1 = "/rallytoast"
 SlashCmdList["RALLYTOAST"] = function(input)
-  local m = (input or ""):lower()
+  local m = strlower(input or "")
   if m == "chat" or m == "ui" or m == "none" then
     DB.toastMode = m
     DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] toastMode set to "..m)
@@ -468,6 +489,7 @@ SlashCmdList["RALLYTOAST"] = function(input)
     DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallytoast chat|ui|none")
   end
 end
+
 
 SLASH_RALLYIGNORE1 = "/rallyignore"
 SlashCmdList["RALLYIGNORE"] = function(msg)
