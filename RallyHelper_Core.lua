@@ -1,7 +1,5 @@
 -- Version: 1.3.8
 
-DEFAULT_CHAT_FRAME:AddMessage("STRING TYPE: "..type(string))
-
 local RH_CHANNEL_NAME    = "RallyHelper"
 local RH_VERIFY_WINDOW   = 30
 local RH_VERIFY_REQUIRED = 2
@@ -148,10 +146,6 @@ local function SendEvent(ev, zone, ts)
   end
   msg = msg .. sep .. "v" .. tostring(ADDON_VERSION)
 
-  if DB and DB.debug then
-    DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH SEND]|r "..msg.." (cid="..tostring(cid)..")")
-  end
-
   SendChatMessage(SanitizeChat(msg), "CHANNEL", nil, cid)
 end
 
@@ -163,18 +157,17 @@ local function ScheduleAfter(sec, fn)
   end
 end
 
-
 function RespondToRequest()
   EnsureChannel()
   if not CanSend("TIMER_REQ") then return end
 
   local now = time()
 
-  local ONY_TOLERANCE = 30 * 60   
-  local WB_TOLERANCE  = 6 * 3600  
-  local EVENT_MAX_AGE = 24 * 3600 
+  local ONY_TOLERANCE = 30 * 60
+  local WB_TOLERANCE  = 6 * 3600
+  local EVENT_MAX_AGE = 24 * 3600
 
-  local sends = {}  
+  local sends = {}
 
   local function pushIfValid(ev, ts, zone, cooldown, tolerance, eventMaxAge)
     if not ts or type(ts) ~= "number" then return end
@@ -182,59 +175,37 @@ function RespondToRequest()
     local age = now - ts
     if cooldown and type(cooldown) == "number" then
       local allowed = cooldown + (tolerance or 0)
-      if age > allowed then
-        if DB and DB.debug then
-          DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH]|r Skip "..ev.." (außerhalb CD) age="..age.." allowed="..allowed)
-        end
-        return
-      end
+      if age > allowed then return end
     else
-      if eventMaxAge and age > eventMaxAge then
-        if DB and DB.debug then
-          DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH]|r Skip "..ev.." (zu alt) age="..age)
-        end
-        return
-      end
+      if eventMaxAge and age > eventMaxAge then return end
     end
     table.insert(sends, function() SendEvent("TIMER_"..ev, zone or "", ts) end)
   end
 
-  pushIfValid("ONY_A", DB and DB.lastOnyA, nil,               ONY_CD, ONY_TOLERANCE, nil)
-  pushIfValid("ONY_H", DB and DB.lastOnyH, nil,               ONY_CD, ONY_TOLERANCE, nil)
-  pushIfValid("NEF_A", DB and DB.lastNefA, nil,               NEF_CD, ONY_TOLERANCE, nil)
-  pushIfValid("NEF_H", DB and DB.lastNefH, nil,               NEF_CD, ONY_TOLERANCE, nil)
-  pushIfValid("WB",    DB and DB.lastWB,   DB and DB.lastWBZone,  WB_CD, WB_TOLERANCE, nil)
-  pushIfValid("ZG",    DB and DB.lastZG,   nil,               nil,    nil,            EVENT_MAX_AGE)
-  pushIfValid("DMF",   DB and DB.lastDMFTime, DB and DB.lastDMFZone, nil, nil,        EVENT_MAX_AGE)
+  pushIfValid("ONY_A", DB and DB.lastOnyA,    nil,                   ONY_CD, ONY_TOLERANCE, nil)
+  pushIfValid("ONY_H", DB and DB.lastOnyH,    nil,                   ONY_CD, ONY_TOLERANCE, nil)
+  pushIfValid("NEF_A", DB and DB.lastNefA,    nil,                   NEF_CD, ONY_TOLERANCE, nil)
+  pushIfValid("NEF_H", DB and DB.lastNefH,    nil,                   NEF_CD, ONY_TOLERANCE, nil)
+  pushIfValid("WB",    DB and DB.lastWB,      DB and DB.lastWBZone,  WB_CD,  WB_TOLERANCE,  nil)
+  pushIfValid("ZG",    DB and DB.lastZG,      nil,                   nil,    nil,            EVENT_MAX_AGE)
+  pushIfValid("DMF",   DB and DB.lastDMFTime, DB and DB.lastDMFZone, nil,    nil,            EVENT_MAX_AGE)
 
-  if next(sends) == nil then
-    if DB and DB.debug then
-      DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH]|r RespondToRequest: nichts zu senden")
-    end
-    return
-  end
+  if next(sends) == nil then return end
 
   for i, fn in ipairs(sends) do
-    local idx    = i
+    local idx     = i
     local fnLocal = fn
     ScheduleAfter((idx - 1) * 0.12, function()
       if type(fnLocal) == "function" then pcall(fnLocal) end
-      if DB and DB.debug then
-        DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH]|r RespondToRequest: sent part "..idx)
-      end
     end)
   end
 
-  -- Retry nach 1.6s
   ScheduleAfter(1.6, function()
     for i, fn in ipairs(sends) do
-      local idx    = i
+      local idx     = i
       local fnLocal = fn
       ScheduleAfter((idx - 1) * 0.12, function()
         if type(fnLocal) == "function" then pcall(fnLocal) end
-        if DB and DB.debug then
-          DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH]|r RespondToRequest: retry part "..idx)
-        end
       end)
     end
   end)
@@ -291,26 +262,16 @@ end
 local function AcceptEvent(ev, ts, zone)
   local now = time()
   if not ts or ts <= 0 then return end
-  if ts < (now - 30 * 24 * 3600) then
-    if DB and DB.debug then
-      DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH]|r Rejecting "..ev.." ts too old: "..tostring(ts))
-    end
-    return
-  end
-  if ts > (now + 3600) then
-    if DB and DB.debug then
-      DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH]|r Rejecting "..ev.." ts in future: "..tostring(ts))
-    end
-    return
-  end
+  if ts < (now - 30 * 24 * 3600) then return end
+  if ts > (now + 3600) then return end
 
-  if ev == "ONY_A" then DB.lastOnyA   = ts end
-  if ev == "ONY_H" then DB.lastOnyH   = ts end
-  if ev == "NEF_A" then DB.lastNefA   = ts end
-  if ev == "NEF_H" then DB.lastNefH   = ts end
-  if ev == "ZG"    then DB.lastZG     = ts end
+  if ev == "ONY_A" then DB.lastOnyA    = ts end
+  if ev == "ONY_H" then DB.lastOnyH    = ts end
+  if ev == "NEF_A" then DB.lastNefA    = ts end
+  if ev == "NEF_H" then DB.lastNefH    = ts end
+  if ev == "ZG"    then DB.lastZG      = ts end
   if ev == "DMF"   then DB.lastDMFTime = ts; DB.lastDMFZone = zone end
-  if ev == "WB"    then DB.lastWB = ts; DB.lastWBZone = zone end
+  if ev == "WB"    then DB.lastWB      = ts; DB.lastWBZone  = zone end
 
   RH_Unconfirmed[ev] = nil
 
@@ -385,30 +346,15 @@ local function RestoreMasterVolume(percent)
 end
 
 local function TryPlayFile(path)
-  if not path or path == "" then
-    if DB and DB.debug then DEFAULT_CHAT_FRAME:AddMessage("[RH SOUND] TryPlayFile: no path") end
-    return false
-  end
-  if type(PlaySoundFile) ~= "function" then
-    if DB and DB.debug then DEFAULT_CHAT_FRAME:AddMessage("[RH SOUND] TryPlayFile: not available") end
-    return false
-  end
-  local ok, err = pcall(function() PlaySoundFile(path, "Master") end)
-  if DB and DB.debug then
-    DEFAULT_CHAT_FRAME:AddMessage("[RH SOUND] TryPlayFile("..tostring(path)..") -> "..tostring(ok).." "..tostring(err or ""))
-  end
+  if not path or path == "" then return false end
+  if type(PlaySoundFile) ~= "function" then return false end
+  local ok = pcall(function() PlaySoundFile(path, "Master") end)
   return ok
 end
 
 local function TryPlaySoundkitFor(ev)
-  if type(PlaySound) ~= "function" then
-    if DB and DB.debug then DEFAULT_CHAT_FRAME:AddMessage("[RH SOUND] TryPlaySoundkitFor: PlaySound not available") end
-    return false
-  end
-  if type(SOUNDKIT) ~= "table" then
-    if DB and DB.debug then DEFAULT_CHAT_FRAME:AddMessage("[RH SOUND] TryPlaySoundkitFor: SOUNDKIT not available") end
-    return false
-  end
+  if type(PlaySound) ~= "function" then return false end
+  if type(SOUNDKIT) ~= "table" then return false end
 
   local ok = false
   if (ev == "ONY_A" or ev == "NEF_A") and SOUNDKIT.RAID_WARNING then
@@ -420,23 +366,16 @@ local function TryPlaySoundkitFor(ev)
   elseif ev == "ZG" and SOUNDKIT.UI_RAID_BOSS_WHISPER then
     ok = pcall(function() PlaySound(SOUNDKIT.UI_RAID_BOSS_WHISPER) end)
   end
-
-  if DB and DB.debug then
-    DEFAULT_CHAT_FRAME:AddMessage("[RH SOUND] TryPlaySoundkitFor("..tostring(ev)..") ok="..tostring(ok))
-  end
   return ok
 end
 
 local function PlayBuffSoundFor(ev)
   if not (DB and DB.rhSounds and DB.rhSounds.enabled) then return end
 
-  local file = DB.rhSounds.files and DB.rhSounds.files[ev]
-  if DB and DB.debug then
-    DEFAULT_CHAT_FRAME:AddMessage("[RH SOUND] PlayBuffSoundFor "..tostring(ev).." file="..tostring(file))
-  end
-
+  local file    = DB.rhSounds.files and DB.rhSounds.files[ev]
   local desired = tonumber(DB.rhSounds.volume) or 100
-  local prev = nil
+  local prev    = nil
+
   if desired >= 0 and desired <= 100 then
     prev = SetMasterVolumePercent(desired)
   end
@@ -454,18 +393,15 @@ do
   local _origAccept = AcceptEvent
   AcceptEvent = function(ev, ts, zone)
     _origAccept(ev, ts, zone)
-
     local now = time()
     local detectedUntil = RH_LocalDetected[ev]
     if detectedUntil and now <= detectedUntil then
       PlayBuffSoundFor(ev)
       RH_LocalDetected[ev] = nil
-
     end
   end
 end
 
-_G.RH_DebugAcceptEvent = AcceptEvent
 _G.RH_TestPlay = function(ev) pcall(function() PlayBuffSoundFor(ev) end) end
 
 SLASH_RALLYSOUND1 = "/rallysound"
@@ -546,7 +482,7 @@ SlashCmdList["RALLYIGNORE"] = function(msg)
     DB.rhIgnore = DB.rhIgnore or {}
     for n, _ in pairs(DB.rhIgnore) do DEFAULT_CHAT_FRAME:AddMessage(n) end
   else
-    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallyignore add|remove|list <name>")
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallyignore add|remove|list <n>")
   end
 end
 
@@ -559,10 +495,6 @@ local function NormalizeChannelName(name)
 end
 
 local function HandleChannel(msg, channel)
-  if DB and DB.debug then
-    DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH DEBUG RAW]|r channel="..tostring(channel).." msg="..tostring(msg))
-  end
-
   local clean = NormalizeChannelName(channel)
   if clean ~= strlower(RH_CHANNEL_NAME) then return end
   if type(msg) ~= "string" or msg == "" then return end
@@ -583,12 +515,12 @@ local function HandleChannel(msg, channel)
     return out
   end
 
-  local parts       = SplitMessage(msg)
-  local ev          = parts[1]
-  local ts          = tonumber(parts[2])
-  local sender      = parts[3]
-  local zone        = parts[4]
-  local verPart     = parts[5]
+  local parts         = SplitMessage(msg)
+  local ev            = parts[1]
+  local ts            = tonumber(parts[2])
+  local sender        = parts[3]
+  local zone          = parts[4]
+  local verPart       = parts[5]
   local senderVersion = nil
 
   if type(verPart) == "string" then
@@ -602,9 +534,6 @@ local function HandleChannel(msg, channel)
   if ts and sender then
     local offset = now - ts
     RH_ClockOffset[sender] = (RH_ClockOffset[sender] or offset) * 0.8 + offset * 0.2
-    if DB and DB.debug then
-      DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH OFFSET]|r "..tostring(sender).." -> "..tostring(RH_ClockOffset[sender]))
-    end
   end
 
   if not ev or not ts or not sender then return end
@@ -612,19 +541,11 @@ local function HandleChannel(msg, channel)
 
   RH_Users[sender] = time()
 
-  if DB and DB.rhIgnore and DB.rhIgnore[sender] then
-    if DB and DB.debug then DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH]|r Ignoring sender "..sender) end
-    return
-  end
+  if DB and DB.rhIgnore and DB.rhIgnore[sender] then return end
 
   if ev == "REQ" then
     local myName = UnitName("player") or ""
-    if sender == myName then
-      if DB and DB.debug then
-        DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH]|r Ignoring own REQ from "..tostring(sender))
-      end
-      return
-    end
+    if sender == myName then return end
     if type(RespondToRequest) == "function" then
       RespondToRequest()
     end
@@ -648,14 +569,9 @@ local function HandleChannel(msg, channel)
       ver    = senderVersion or 0,
     })
 
-    if DB and DB.debug then
-      DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH TIMER RECV]|r "..tostring(sender).." -> "..tostring(realEv).." ts="..tostring(ts).." adj="..tostring(adjusted).." ver="..tostring(senderVersion))
-    end
-
     if not RH_TimerResponseTimers[realEv] then
       RH_TimerResponseTimers[realEv] = true
       ScheduleAfter(TIMER_RESPONSE_WINDOW, function()
-
         local now = time()
 
         local list = RH_TimerResponses[realEv] or {}
@@ -691,13 +607,6 @@ local function HandleChannel(msg, channel)
 
         if bestIdx and bestDiff and bestDiff < (7 * 24 * 3600) and bestTs > 0 then
           AcceptEvent(realEv, bestTs, bestZone)
-          if DB and DB.debug then
-            DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH TIMER PICK]|r "..tostring(realEv).." -> "..tostring(bestTs).." zone="..tostring(bestZone))
-          end
-        else
-          if DB and DB.debug then
-            DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH TIMER PICK]|r "..tostring(realEv).." -> kein gültiger Kandidat (bestDiff="..tostring(bestDiff)..")")
-          end
         end
 
         RH_TimerResponses[realEv]      = nil
@@ -794,10 +703,10 @@ local function HandleYell(npc, msg)
 end
 
 local DMF_NPCS = {
-  ["Sayge"]                    = true,
-  ["Professor Thaddeus Paleo"] = true,
-  ["Gelvas Grimegate"]         = true,
-  ["Stamp Thunderhorn"]        = true,
+  ["Sayge"]                      = true,
+  ["Professor Thaddeus Paleo"]   = true,
+  ["Gelvas Grimegate"]           = true,
+  ["Stamp Thunderhorn"]          = true,
   ["Darkmoon Faire Mystic Mage"] = true,
 }
 
@@ -995,11 +904,6 @@ SlashCmdList["RALLYHELPER"] = function(msg)
     DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] UI lock: " .. tostring(DB.locked))
   elseif msg == "users" then
     DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Users online: " .. CountUsers())
-  elseif msg == "debug" then
-    DB.debug = not DB.debug
-    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Debug: " .. tostring(DB.debug))
-    DEFAULT_CHAT_FRAME:AddMessage("ZG: "  .. (DB.lastZG      and FormatAgo(DB.lastZG)      or "unknown"))
-    DEFAULT_CHAT_FRAME:AddMessage("DMF: " .. (DB.lastDMFTime and FormatAgo(DB.lastDMFTime) or "unknown"))
   elseif msg == "request" then
     RequestTimers()
     DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Requested timers from channel")
@@ -1035,16 +939,8 @@ f:SetScript("OnEvent", function()
         (DB.lastWB      and DB.lastWB      > 0 and (now - DB.lastWB)      < MAX_AGE) or
         (DB.lastDMFTime and DB.lastDMFTime > 0 and (now - DB.lastDMFTime) < MAX_AGE)
       )
-
       if not hasValid then
         RequestTimers()
-        if DB and DB.debug then
-          DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH]|r PLAYER_LOGIN: keine lokalen Timer -> RequestTimers gesendet")
-        end
-      else
-        if DB and DB.debug then
-          DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RH]|r PLAYER_LOGIN: lokale Timer vorhanden, kein Request")
-        end
       end
     end)
 
