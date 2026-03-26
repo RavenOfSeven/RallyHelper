@@ -1,546 +1,1048 @@
-RHGlobal = RHGlobal or {}
-RHGlobal.Unconfirmed = RHGlobal.Unconfirmed or {}
+-- Version: 1.3.9
 
-local ui
-local sizeUI
+local RH_CHANNEL_NAME    = "RallyHelper"
+local RH_ADDON_PREFIX    = "RallyHelper"
+local RH_VERIFY_WINDOW   = 30
+local RH_VERIFY_REQUIRED = 1
+local RH_VERIFY_REQUIRED_REQUEST = 2
+local RH_SEND_THROTTLE   = 10
 
-local ONY_ICON = "Interface\\Icons\\INV_Misc_Head_Dragon_Red"
-local NEF_ICON = "Interface\\Icons\\INV_Misc_Head_Dragon_Blue"
-local WB_ICON  = "Interface\\Icons\\Spell_Nature_BloodLust"
+local ONY_CD = 2 * 60 * 60
+local NEF_CD = 2 * 60 * 60
+local WB_CD  = 3 * 60 * 60
+local WB_WARN_DELAY = 6
 
-local DEFAULT_W = 420
-local DEFAULT_H = 190
-local DEFAULT_SCALE = 1.0
+local DB_VERSION = 2
+local ADDON_VERSION = 2
+local MIN_ACCEPTED_VERSION = 2
+
+local DB
+local verify = {}
+local RH_Users = {}
+local lastSend = {}
+local RH_LocalDetected = {}
+local LOCAL_DETECT_WINDOW = 2.0
+
+local str = _G.string or string
+local strmatch = str.match or function() return nil end
+local strfind  = str.find  or function() return nil end
+local strlower = str.lower or function(s) return s end
+local strsub   = str.sub   or function(s, i, j) return s end
+local strlen   = str.len   or function(s) return 0 end
+local strgsub  = str.gsub  or function(s) return s end
 
 local floor = math.floor
 
-local function IsLocked()
-  return RallyHelperDB and RallyHelperDB.locked
-end
+RHGlobal = RHGlobal or {}
+RH_TimerResponses = RH_TimerResponses or {}
+RH_TimerResponseTimers = RH_TimerResponseTimers or {}
+local TIMER_RESPONSE_WINDOW = 2.0
+RHGlobal.Unconfirmed = RHGlobal.Unconfirmed or {}
+local RH_Unconfirmed = RHGlobal.Unconfirmed
+local RH_ClockOffset = RH_ClockOffset or {}
 
-local function FormatTime(sec)
-  if not sec or sec <= 0 then return "ready", 0 end
-  local h = floor(sec / 3600)
-  local m = floor((sec - h * 3600) / 60)
-  if h > 0 then return h .. "h " .. m .. "m", sec end
-  return m .. "m", sec
-end
+local function EnsureDB()
+  DB = RallyHelperDB or {}
+  RallyHelperDB = DB
 
-local function Colorize(text, sec)
-  if not sec or sec <= 0 then
-    return "|cff33ff33" .. text .. "|r"
-  elseif sec < 1800 then
-    return "|cffffff33" .. text .. "|r"
-  else
-    return "|cffff3333" .. text .. "|r"
+  DB.version = DB.version or 0
+  if DB.version < DB_VERSION then
+    DB.ui      = DB.ui or {}
+    DB.minimap = DB.minimap or {}
+    DB.locked  = false
+    DB.toast   = true
+    DB.version = DB_VERSION
   end
+
+  DB.rhSounds = DB.rhSounds or {}
+  DB.rhSounds.enabled = (DB.rhSounds.enabled == nil) and true or DB.rhSounds.enabled
+  DB.rhSounds.volume  = DB.rhSounds.volume or 100
+  DB.rhSounds.files   = DB.rhSounds.files or {
+    ONY_A = "Sound\\Interface\\PVPFlagTakenHordeMono.wav",
+    NEF_A = "Sound\\Interface\\PVPFlagTakenHordeMono.wav",
+    ONY_H = "Sound\\Interface\\PVPFlagTakenHordeMono.wav",
+    NEF_H = "Sound\\Interface\\PVPFlagTakenHordeMono.wav",
+    WB    = "Sound\\Interface\\PVPFlagTakenHordeMono.wav",
+    ZG    = "Sound\\Interface\\PVPFlagTakenHordeMono.wav",
+  }
+  DB.toastMode = DB.toastMode or "none"  -- "chat" | "ui" | "none"
+  DB.rhIgnore  = DB.rhIgnore or {}
+  DB.showRawInChat = DB.showRawInChat or false
+  DB.minimap = DB.minimap or { angle = 220, hide = false }
+end
+
+pcall(EnsureDB)
+
+if type(C_ChatInfo) == "table" and type(C_ChatInfo.RegisterAddonMessagePrefix) == "function" then
+  pcall(function() C_ChatInfo.RegisterAddonMessagePrefix(RH_ADDON_PREFIX) end)
+elseif type(RegisterAddonMessagePrefix) == "function" then
+  pcall(function() RegisterAddonMessagePrefix(RH_ADDON_PREFIX) end)
+end
+
+local function SanitizeChat(msg)
+  if not msg then return "" end
+  msg = strgsub(msg, "%%", "%%%%")
+  return msg
 end
 
 local function FormatAgo(ts)
   if not ts then return "unknown" end
   local d = time() - ts
-  if d < 60 then return d .. "s ago" end
-  if d < 3600 then return floor(d / 60) .. "m ago" end
+  if d < 60    then return d .. "s ago" end
+  if d < 3600  then return floor(d / 60) .. "m ago" end
   local h = floor(d / 3600)
   local m = floor((d - h * 3600) / 60)
   return h .. "h " .. m .. "m ago"
 end
 
-local function EnsureDB()
-  RallyHelperDB = RallyHelperDB or {}
-  RallyHelperDB.ui = RallyHelperDB.ui or { w = DEFAULT_W, h = DEFAULT_H, scale = DEFAULT_SCALE }
-  return RallyHelperDB.ui
-end
-
-local function ApplyPfUISkin(frame)
-  if not frame or not pfUI or not pfUI.api then return end
-  if pfUI.api.SkinFrame then pcall(pfUI.api.SkinFrame, frame) end
-end
-
-local function ApplyLayout()
-  if not ui or not ui.initialized then return end
-
-  local W = ui:GetWidth()
-  local PAD, GAP = 16, 20
-  local COL_W = (W - PAD * 2 - GAP) / 2
-  local COL1_X, COL2_X = PAD, PAD + COL_W + GAP
-
-  ui.onyIcon:SetPoint("TOPLEFT", ui, "TOPLEFT", COL1_X + COL_W/2 - 40, -30)
-  ui.onyTitle:SetPoint("TOPLEFT", ui, "TOPLEFT", COL1_X, -30)
-  ui.onyTitle:SetWidth(COL_W)
-
-  ui.nefIcon:SetPoint("TOPLEFT", ui, "TOPLEFT", COL2_X + COL_W/2 - 40, -30)
-  ui.nefTitle:SetPoint("TOPLEFT", ui, "TOPLEFT", COL2_X, -30)
-  ui.nefTitle:SetWidth(COL_W)
-
-  ui.onySW:SetPoint("TOPLEFT", ui, "TOPLEFT", COL1_X, -54)
-  ui.onySW:SetWidth(COL_W)
-
-  ui.onyOG:SetPoint("TOPLEFT", ui, "TOPLEFT", COL1_X, -70)
-  ui.onyOG:SetWidth(COL_W)
-
-  ui.nefSW:SetPoint("TOPLEFT", ui, "TOPLEFT", COL2_X, -54)
-  ui.nefSW:SetWidth(COL_W)
-
-  ui.nefOG:SetPoint("TOPLEFT", ui, "TOPLEFT", COL2_X, -70)
-  ui.nefOG:SetWidth(COL_W)
-
-  ui.zg:SetPoint("TOPLEFT", ui, "TOPLEFT", PAD, -98)
-  ui.zg:SetWidth(W - PAD*2)
-
-  ui.dmf:SetPoint("TOPLEFT", ui, "TOPLEFT", PAD, -114)
-  ui.dmf:SetWidth(W - PAD*2)
-
-  ui.wb:SetPoint("TOPLEFT", ui, "TOPLEFT", PAD, -138)
-  ui.wb:SetWidth(W - PAD*2)
-end
-
-function UpdateTexts()
-  if not ui or not ui.initialized or not RallyHelperDB then return end
-  local DB = RallyHelperDB
-  local t = time()
-
-  local function FormatUnconfirmed(ev, label)
-    local u = RHGlobal.Unconfirmed[ev]
-    if not u then return nil end
-    return "|cFFAAAAAA" .. label .. ": unconfirmed (" .. FormatAgo(u.ts) .. ")|r"
-  end
-
-  ui.onySW:SetText(
-    FormatUnconfirmed("ONY_A", "Stormwind")
-    or ("Stormwind: " .. Colorize(FormatTime(DB.lastOnyA and DB.lastOnyA + 7200 - t)))
-  )
-
-  ui.onyOG:SetText(
-    FormatUnconfirmed("ONY_H", "Orgrimmar")
-    or ("Orgrimmar: " .. Colorize(FormatTime(DB.lastOnyH and DB.lastOnyH + 7200 - t)))
-  )
-
-  ui.nefSW:SetText(
-    FormatUnconfirmed("NEF_A", "Stormwind")
-    or ("Stormwind: " .. Colorize(FormatTime(DB.lastNefA and DB.lastNefA + 7200 - t)))
-  )
-
-  ui.nefOG:SetText(
-    FormatUnconfirmed("NEF_H", "Orgrimmar")
-    or ("Orgrimmar: " .. Colorize(FormatTime(DB.lastNefH and DB.lastNefH + 7200 - t)))
-  )
-
-  ui.zg:SetText("ZG last drop: " .. (DB.lastZG and FormatAgo(DB.lastZG) or "unknown"))
-
-  ui.dmf:SetText(
-    "DMF last seen: "
-    .. (DB.lastDMFTime and (FormatAgo(DB.lastDMFTime) .. " in " .. (DB.lastDMFZone or "unknown")) or "unknown")
-  )
-
-  ui.wb:SetText(
-    FormatUnconfirmed("WB", "Warchief's Blessing")
-    or ("Warchief's Blessing: " .. Colorize(FormatTime(DB.lastWB and DB.lastWB + 10800 - t)))
-  )
-end
-
-function CreateUI()
-  local S = EnsureDB()
-
-  ui = ui or CreateFrame("Frame", "RallyHelperFrame", UIParent)
-  ui:SetWidth(S.w)
-  ui:SetHeight(S.h)
-  ui:SetClampedToScreen(true)
-  ui:SetMovable(true)
-  ui:SetScale(S.scale or 1.0)
-
-  if S.x and S.y then
-    ui:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", S.x, S.y)
-  else
-    ui:SetPoint("CENTER")
-  end
-
-  ui.bgFrame = ui.bgFrame or CreateFrame("Frame", nil, ui)
-  ui.bgFrame:SetAllPoints()
-  ui.bgFrame:SetBackdrop({
-    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-    insets = { left=4, right=4, top=4, bottom=4 }
-  })
-  ui.bgFrame:SetBackdropColor(0,0,0,0.75)
-  ui.bgFrame:SetAlpha(0.18)
-
-  if not ui.initialized then
-    ui.initialized = true
-
-    local function CreateFS(r, g, b)
-      local f = ui:CreateFontString(nil, "OVERLAY")
-      f:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
-      if r then f:SetTextColor(r, g, b) end
-      f:SetJustifyH("CENTER")
-      return f
+local function GetChannelId()
+  for i = 1, 10 do
+    local id, name = GetChannelName(i)
+    if name == RH_CHANNEL_NAME then
+      return id
     end
-
-    ui.onyIcon = ui:CreateTexture(nil, "ARTWORK")
-    ui.onyIcon:SetTexture(ONY_ICON)
-    ui.onyIcon:SetWidth(16)
-    ui.onyIcon:SetHeight(16)
-
-    ui.nefIcon = ui:CreateTexture(nil, "ARTWORK")
-    ui.nefIcon:SetTexture(NEF_ICON)
-    ui.nefIcon:SetWidth(16)
-    ui.nefIcon:SetHeight(16)
-
-    ui.onyTitle = CreateFS()
-    ui.onyTitle:SetText("Onyxia")
-
-    ui.nefTitle = CreateFS()
-    ui.nefTitle:SetText("Nefarian")
-
-    ui.onySW = CreateFS(0.3, 0.6, 1)
-    ui.onyOG = CreateFS(1, 0.3, 0.3)
-    ui.nefSW = CreateFS(0.3, 0.6, 1)
-    ui.nefOG = CreateFS(1, 0.3, 0.3)
-
-    ui.zg  = CreateFS(0.2, 1, 0.2)
-    ui.dmf = CreateFS(0.7, 0.4, 1)
-    ui.wb  = CreateFS(1, 0.6, 0.1)
-
-    ui:EnableMouse(true)
-    ui:RegisterForDrag("LeftButton")
-
-    ui:SetScript("OnDragStart", function()
-      if not IsLocked() then ui:StartMoving() end
-    end)
-
-    ui:SetScript("OnDragStop", function()
-      ui:StopMovingOrSizing()
-      S.x, S.y = ui:GetLeft(), ui:GetBottom()
-    end)
-
-    ui:SetScript("OnEnter", function()
-      ui.bgFrame:SetAlpha(1.0)
-    end)
-
-    ui:SetScript("OnLeave", function()
-      ui.bgFrame:SetAlpha(0.18)
-    end)
-
-    ui:SetScript("OnUpdate", function()
-      if (GetTime() - (ui._last or 0)) > 0.5 then
-        ui._last = GetTime()
-        UpdateTexts()
-      end
-    end)
   end
-
-  ApplyLayout()
-  UpdateTexts()
-  ApplyPfUISkin(ui)
+  return nil
 end
 
-local unconfUI
-
-RallyHelperDB = RallyHelperDB or {}
-RallyHelperDB.unconfFilter = RallyHelperDB.unconfFilter or {
-  ALLIANCE = true,
-  HORDE = true,
-  ZG = true,
-  WB = true,
-}
-
-local FILTER = RallyHelperDB.unconfFilter
-local MAX_UNCONFIRMED = 20
-
-function CreateUnconfirmedUI()
-  if unconfUI then return end
-
-  unconfUI = CreateFrame("Frame", "RallyHelperUnconfirmedFrame", UIParent)
-  unconfUI:SetWidth(320)
-  unconfUI:SetHeight(240)
-  unconfUI:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-  unconfUI:SetFrameStrata("DIALOG")
-  unconfUI:SetMovable(true)
-  unconfUI:EnableMouse(true)
-  unconfUI:RegisterForDrag("LeftButton")
-  unconfUI:SetScript("OnDragStart", function() unconfUI:StartMoving() end)
-  unconfUI:SetScript("OnDragStop", function() unconfUI:StopMovingOrSizing() end)
-
-  unconfUI:SetBackdrop({
-    bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true, tileSize = 16, edgeSize = 16,
-    insets = { left=4, right=4, top=4, bottom=4 }
-  })
-  unconfUI:SetBackdropColor(0, 0, 0, 0.35)
-
-  local function AddCheck(label, key, x)
-    local cb = CreateFrame("CheckButton", nil, unconfUI, "UICheckButtonTemplate")
-    cb:SetPoint("TOPLEFT", unconfUI, "TOPLEFT", x, -6)
-    cb:SetChecked(FILTER[key])
-
-    cb.text = cb:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    cb.text:SetPoint("LEFT", cb, "RIGHT", 2, 0)
-    cb.text:SetText(label)
-
-    cb:SetScript("OnClick", function()
-      FILTER[key] = cb:GetChecked()
-      RallyHelper_UpdateUnconfirmed()
-    end)
-  end
-
-  AddCheck("Alliance", "ALLIANCE", 10)
-  AddCheck("Horde",    "HORDE",    100)
-  AddCheck("ZG",       "ZG",       180)
-  AddCheck("Warchief", "WB",       240)
-
-  local scroll = CreateFrame("ScrollFrame", nil, unconfUI)
-  scroll:SetPoint("TOPLEFT", unconfUI, "TOPLEFT", 8, -32)
-  scroll:SetPoint("BOTTOMRIGHT", unconfUI, "BOTTOMRIGHT", -28, 8)
-
-  local child = CreateFrame("Frame", nil, scroll)
-  child:SetWidth(280)
-  child:SetHeight(600)
-  scroll:SetScrollChild(child)
-
-  unconfUI.child = child
-  unconfUI.scroll = scroll
-
-  local slider = CreateFrame("Slider", nil, unconfUI, "UIPanelScrollBarTemplate")
-  slider:SetPoint("TOPRIGHT", unconfUI, "TOPRIGHT", -4, -40)
-  slider:SetPoint("BOTTOMRIGHT", unconfUI, "BOTTOMRIGHT", -4, 20)
-  slider:SetMinMaxValues(0, 200)
-  slider:SetValueStep(10)
-  slider:SetWidth(16)
-
-  slider:SetScript("OnValueChanged", function(_, v)
-  if not unconfUI.scroll then return end
-  local child = unconfUI.scroll:GetScrollChild()
-  if not child then return end
-  if v == nil then return end
-  if v < 0 then v = 0 end
-  unconfUI.scroll:SetVerticalScroll(v)
-end)
-
-
-  scroll:SetScript("OnMouseWheel", function(_, delta)
-  if not unconfUI.slider then return end
-  local new = unconfUI.slider:GetValue() - delta * 20
-  if new < 0 then new = 0 end
-  unconfUI.slider:SetValue(new)
-end)
-  unconfUI.slider = slider
+local function Delay(seconds, func)
+  local f = CreateFrame("Frame")
+  local t = GetTime() + seconds
+  f:SetScript("OnUpdate", function()
+    if GetTime() >= t then
+      f:SetScript("OnUpdate", nil)
+      func()
+    end
+  end)
 end
 
+local function JoinChannel()
+  if GetChannelId() then return end
+  JoinChannelByName(RH_CHANNEL_NAME)
+  Delay(1, function()
+    if not GetChannelId() then
+      JoinChannelByName(RH_CHANNEL_NAME)
+    end
+  end)
+end
 
-
-
-function RallyHelper_UpdateUnconfirmed()
-  if not unconfUI then return end
-
-  local child = unconfUI.child
-  if not child then return end
-
-  for _, f in ipairs(child.lines or {}) do f:Hide() end
-  child.lines = child.lines or {}
-
-  local list = {}
-  for ev, data in pairs(RHGlobal.Unconfirmed) do
-    table.insert(list, { ev = ev, ts = data.ts, zone = data.zone })
+local function EnsureChannel()
+  if not GetChannelId() then
+    JoinChannel()
   end
+end
 
-  table.sort(list, function(a, b) return a.ts > b.ts end)
-
-  while table.getn(list) > MAX_UNCONFIRMED do
-    table.remove(list)
+local function CanSend(ev)
+  local now = time()
+  if not lastSend[ev] or (now - lastSend[ev]) >= RH_SEND_THROTTLE then
+    lastSend[ev] = now
+    return true
   end
+end
 
-  local i = 0
+local function SendEvent(ev, zone, ts)
+  ts = ts or time()
+  local player = UnitName("player") or "?"
+  local sep = "^"
+  local msg = ev .. sep .. tostring(ts) .. sep .. player
+  if zone and zone ~= "" then msg = msg .. sep .. zone end
+  msg = msg .. sep .. "v" .. tostring(ADDON_VERSION)
 
-  for _, entry in ipairs(list) do
-    local ev = entry.ev
-    local ts = entry.ts
-
-    local label, color, category
-
-    if ev == "ONY_A" then
-      label = "Ony_Alliance"
-      color = "|cff3399ff"
-      category = "ALLIANCE"
-    elseif ev == "NEF_A" then
-      label = "Nef_Alliance"
-      color = "|cff3399ff"
-      category = "ALLIANCE"
-    elseif ev == "ONY_H" then
-      label = "Ony_Horde"
-      color = "|cffff3333"
-      category = "HORDE"
-    elseif ev == "NEF_H" then
-      label = "Nef_Horde"
-      color = "|cffff3333"
-      category = "HORDE"
-    elseif ev == "ZG" then
-      label = "ZG"
-      color = "|cff33ff33"
-      category = "ZG"
-    elseif ev == "WB" then
-      label = "Warchief"
-      color = "|cffffaa33"
-      category = "WB"
+  local ok = false
+  if type(C_ChatInfo) == "table" and type(C_ChatInfo.SendAddonMessage) == "function" then
+    local cid = GetChannelId()
+    if cid then
+      pcall(function() C_ChatInfo.SendAddonMessage(RH_ADDON_PREFIX, msg, "CHANNEL", tostring(cid)) end)
+      ok = true
     else
-      label = ev
-      color = "|cFFAAAAAA"
-      category = "OTHER"
+      pcall(function() C_ChatInfo.SendAddonMessage(RH_ADDON_PREFIX, msg, "GUILD") end)
+      ok = true
     end
-
-    if FILTER[category] then
-      i = i + 1
-
-      local line = child.lines[i]
-      if not line then
-        line = child:CreateFontString(nil, "OVERLAY")
-        line:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
-        line:SetJustifyH("LEFT")
-        child.lines[i] = line
-      end
-
-      local count = 0
-      if verify and verify[ev] then
-        count = table.getn(verify[ev])
-      end
-
-      line:SetPoint("TOPLEFT", child, "TOPLEFT", 0, - (i - 1) * 18)
-
-      line:SetText(
-        color .. label .. "|r" ..
-        "  |cFFAAAAAA" .. count .. "/2 Unconfirmed  " .. FormatAgo(ts) .. "|r"
-      )
-      line:Show()
+  elseif type(SendAddonMessage) == "function" then
+    local cid = GetChannelId()
+    if cid then
+      pcall(function() SendAddonMessage(RH_ADDON_PREFIX, msg, "CHANNEL", tostring(cid)) end)
+      ok = true
+    else
+      pcall(function() SendAddonMessage(RH_ADDON_PREFIX, msg, "GUILD") end)
+      ok = true
+    end
+  else
+    local cid = GetChannelId()
+    if cid then
+      pcall(function() SendChatMessage(SanitizeChat(msg), "CHANNEL", nil, cid) end)
+      ok = true
     end
   end
 
-  if i == 0 then
-    unconfUI.slider:SetMinMaxValues(0, 0)
-    unconfUI.slider:SetValue(0)
+  return ok
+end
+
+local function ScheduleAfter(sec, fn)
+  if type(C_Timer) == "table" and type(C_Timer.After) == "function" then
+    C_Timer.After(sec, fn)
+  else
+    Delay(sec, fn)
+  end
+end
+
+function RespondToRequest()
+  EnsureChannel()
+  if not CanSend("TIMER_REQ") then return end
+
+  local now = time()
+
+  local ONY_TOLERANCE = 30 * 60
+  local WB_TOLERANCE  = 6 * 3600
+  local EVENT_MAX_AGE = 24 * 3600
+
+  local sends = {}
+
+  local function pushIfValid(ev, ts, zone, cooldown, tolerance, eventMaxAge)
+    if not ts or type(ts) ~= "number" then return end
+    if ts <= 0 then return end
+    local age = now - ts
+    if cooldown and type(cooldown) == "number" then
+      local allowed = cooldown + (tolerance or 0)
+      if age > allowed then return end
+    else
+      if eventMaxAge and age > eventMaxAge then return end
+    end
+    table.insert(sends, function() SendEvent("TIMER_"..ev, zone or "", ts) end)
+  end
+
+  pushIfValid("ONY_A", DB and DB.lastOnyA,    nil,                   ONY_CD, ONY_TOLERANCE, nil)
+  pushIfValid("ONY_H", DB and DB.lastOnyH,    nil,                   ONY_CD, ONY_TOLERANCE, nil)
+  pushIfValid("NEF_A", DB and DB.lastNefA,    nil,                   NEF_CD, ONY_TOLERANCE, nil)
+  pushIfValid("NEF_H", DB and DB.lastNefH,    nil,                   NEF_CD, ONY_TOLERANCE, nil)
+  pushIfValid("WB",    DB and DB.lastWB,      DB and DB.lastWBZone,  WB_CD,  WB_TOLERANCE,  nil)
+  pushIfValid("ZG",    DB and DB.lastZG,      nil,                   nil,    nil,            EVENT_MAX_AGE)
+  pushIfValid("DMF",   DB and DB.lastDMFTime, DB and DB.lastDMFZone, nil,    nil,            EVENT_MAX_AGE)
+
+  if next(sends) == nil then return end
+
+  for i, fn in ipairs(sends) do
+    local idx     = i
+    local fnLocal = fn
+    ScheduleAfter((idx - 1) * 0.12, function()
+      if type(fnLocal) == "function" then pcall(fnLocal) end
+    end)
+  end
+
+  ScheduleAfter(1.6, function()
+    for i, fn in ipairs(sends) do
+      local idx     = i
+      local fnLocal = fn
+      ScheduleAfter((idx - 1) * 0.12, function()
+        if type(fnLocal) == "function" then pcall(fnLocal) end
+      end)
+    end
+  end)
+end
+
+local function Prune(list)
+  local now = time()
+  local n = table.getn(list)
+  for i = n, 1, -1 do
+    if now - list[i].ts > RH_VERIFY_WINDOW then
+      table.remove(list, i)
+    end
+  end
+end
+
+local function VerifyEvent(ev, ts, sender, zone, required)
+  required = required or RH_VERIFY_REQUIRED
+
+  verify[ev] = verify[ev] or {}
+  local list = verify[ev]
+
+  Prune(list)
+
+  for _, v in ipairs(list) do
+    if v.sender == sender then return end
+  end
+
+  local adjusted = ts
+  if RH_ClockOffset and RH_ClockOffset[sender] then
+    adjusted = ts + RH_ClockOffset[sender]
+  end
+
+  table.insert(list, { ts = ts, adj = adjusted, sender = sender, zone = zone or "" })
+
+  if table.getn(list) >= required then
+    local bestAdj, bestZone = -1, ""
+    for _, v in ipairs(list) do
+      if v.adj > bestAdj then bestAdj = v.adj end
+    end
+
+    local chosenOriginalTs = 0
+    for _, v in ipairs(list) do
+      if v.adj == bestAdj then
+        chosenOriginalTs = v.ts
+        if v.zone ~= "" then bestZone = v.zone end
+      end
+    end
+
+    verify[ev] = nil
+    return true, chosenOriginalTs, bestZone
+  end
+end
+
+local function AcceptEvent(ev, ts, zone)
+  local now = time()
+  if not ts or ts <= 0 then return end
+  if ts < (now - 30 * 24 * 3600) then return end
+  if ts > (now + 3600) then return end
+
+  if ev == "ONY_A" then DB.lastOnyA    = ts end
+  if ev == "ONY_H" then DB.lastOnyH    = ts end
+  if ev == "NEF_A" then DB.lastNefA    = ts end
+  if ev == "NEF_H" then DB.lastNefH    = ts end
+  if ev == "ZG"    then DB.lastZG      = ts end
+  if ev == "DMF"   then DB.lastDMFTime = ts; DB.lastDMFZone = zone end
+  if ev == "WB"    then DB.lastWB      = ts; DB.lastWBZone  = zone end
+
+  RH_Unconfirmed[ev] = nil
+
+  if DB and DB.toastMode then
+    if DB.toastMode == "chat" then
+      DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99[RallyHelper]|r " .. ev .. " confirmed")
+    elseif DB.toastMode == "ui" then
+      if type(RallyHelper_ShowToast) == "function" then
+        RallyHelper_ShowToast(ev .. " confirmed")
+      end
+    end
+  end
+
+  if type(RallyHelper_UpdateUI) == "function" then
+    RallyHelper_UpdateUI()
+  end
+end
+
+local function AddUnconfirmedEvent(ev, ts, sender, zone)
+  RH_Unconfirmed[ev] = {
+    ts     = ts,
+    sender = sender,
+    zone   = zone,
+    time   = time(),
+  }
+
+  if type(RallyHelper_UpdateUI) == "function" then
+    RallyHelper_UpdateUI()
+  end
+end
+
+local function CountUsers()
+  local now   = time()
+  local count = 0
+  for name, ts in pairs(RH_Users) do
+    if now - ts < 60 then
+      count = count + 1
+    else
+      RH_Users[name] = nil
+    end
+  end
+  return count
+end
+
+local function DetectMasterVolumeCVar()
+  local candidates = { "Sound_MasterVolume", "MasterSound", "Sound_MasterVolumeDB" }
+  for _, name in ipairs(candidates) do
+    local ok, val = pcall(GetCVar, name)
+    if ok and val ~= nil then return name end
+  end
+  return nil
+end
+
+local _RH_MasterCVar = DetectMasterVolumeCVar()
+
+local function SetMasterVolumePercent(percent)
+  if type(percent) ~= "number" then return nil end
+  if not _RH_MasterCVar then return nil end
+  percent = math.max(0, math.min(100, percent))
+  local ok, prev = pcall(GetCVar, _RH_MasterCVar)
+  if not ok or prev == nil then return nil end
+  local prevPercent = math.floor((tonumber(prev) or 1) * 100 + 0.5)
+  local sOk = pcall(SetCVar, _RH_MasterCVar, tostring(percent / 100))
+  if not sOk then return nil end
+  return prevPercent
+end
+
+local function RestoreMasterVolume(percent)
+  if type(percent) ~= "number" then return false end
+  if not _RH_MasterCVar then return false end
+  return pcall(SetCVar, _RH_MasterCVar, tostring(percent / 100))
+end
+
+local function TryPlayFile(path)
+  if not path or path == "" then return false end
+  if type(PlaySoundFile) ~= "function" then return false end
+  local ok = pcall(function() PlaySoundFile(path, "Master") end)
+  return ok
+end
+
+local function TryPlaySoundkitFor(ev)
+  if type(PlaySound) ~= "function" then return false end
+  if type(SOUNDKIT) ~= "table" then return false end
+
+  local ok = false
+  if (ev == "ONY_A" or ev == "NEF_A") and SOUNDKIT.RAID_WARNING then
+    ok = pcall(function() PlaySound(SOUNDKIT.RAID_WARNING) end)
+  elseif (ev == "ONY_H" or ev == "NEF_H") and SOUNDKIT.IG_QUEST_LIST_UPDATE then
+    ok = pcall(function() PlaySound(SOUNDKIT.IG_QUEST_LIST_UPDATE) end)
+  elseif ev == "WB" and SOUNDKIT.UI_BATTLEGROUND_COUNTDOWN_TIMER then
+    ok = pcall(function() PlaySound(SOUNDKIT.UI_BATTLEGROUND_COUNTDOWN_TIMER) end)
+  elseif ev == "ZG" and SOUNDKIT.UI_RAID_BOSS_WHISPER then
+    ok = pcall(function() PlaySound(SOUNDKIT.UI_RAID_BOSS_WHISPER) end)
+  end
+  return ok
+end
+
+local function PlayBuffSoundFor(ev)
+  if not (DB and DB.rhSounds and DB.rhSounds.enabled) then return end
+
+  local file    = DB.rhSounds.files and DB.rhSounds.files[ev]
+  local desired = tonumber(DB.rhSounds.volume) or 100
+  local prev    = nil
+
+  if desired >= 0 and desired <= 100 then
+    prev = SetMasterVolumePercent(desired)
+  end
+
+  local played = false
+  if file then played = TryPlayFile(file) end
+  if not played then TryPlaySoundkitFor(ev) end
+
+  if prev ~= nil then
+    ScheduleAfter(0.2, function() RestoreMasterVolume(prev) end)
+  end
+end
+
+do
+  local _origAccept = AcceptEvent
+  AcceptEvent = function(ev, ts, zone)
+    _origAccept(ev, ts, zone)
+    local now = time()
+    local detectedUntil = RH_LocalDetected[ev]
+    if detectedUntil and now <= detectedUntil then
+      PlayBuffSoundFor(ev)
+      RH_LocalDetected[ev] = nil
+    end
+  end
+end
+
+_G.RH_TestPlay = function(ev) pcall(function() PlayBuffSoundFor(ev) end) end
+
+SLASH_RALLYSOUND1 = "/rallysound"
+SlashCmdList["RALLYSOUND"] = function(input)
+  local txt = input or ""
+  local cmd, arg = strmatch(txt, "^(%S*)%s*(.-)$")
+  cmd = cmd and strlower(cmd) or ""
+
+  DB.rhSounds = DB.rhSounds or {}
+  DB.rhSounds.files = DB.rhSounds.files or {}
+
+  if cmd == "on" then
+    DB.rhSounds.enabled = true
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Sounds enabled")
     return
   end
 
-  unconfUI.slider:SetMinMaxValues(0, math.max(0, i * 18 - 180))
+  if cmd == "off" then
+    DB.rhSounds.enabled = false
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Sounds disabled")
+    return
+  end
+
+  if cmd == "set" then
+    if arg and arg ~= "" then
+      local ev, path = strmatch(arg, "^(%S+)%s+(.+)$")
+      if ev and path then
+        DB.rhSounds.files[ev] = path
+        DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Set sound for "..ev)
+      else
+        DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallysound set <EVENT> <path>")
+      end
+    else
+      DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallysound set <EVENT> <path>")
+    end
+    return
+  end
+
+  if cmd == "volume" then
+    if arg and arg ~= "" then
+      local v = tonumber(arg)
+      if v and v >= 0 and v <= 100 then
+        DB.rhSounds.volume = v
+        DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Sound volume set to "..tostring(v))
+      else
+        DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallysound volume <0-100>")
+      end
+    else
+      DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallysound volume <0-100>")
+    end
+    return
+  end
+
+  DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Commands: on, off, set <EVENT> <path>, volume <0-100>")
 end
 
+local function InjectSoundCheckbox()
+  if not DB then return end
+  if not RH_UIFrame or not RH_UIFrame.CreateFontString then return end
+  if RH_UIFrame._rhSoundCheckboxCreated then return end
 
+  local cb = CreateFrame("CheckButton", "RallyHelperSoundCheckbox", RH_UIFrame, "UICheckButtonTemplate")
+  cb:SetPoint("TOPLEFT", RH_UIFrame, "TOPLEFT", 12, -36)
+  cb.text = cb:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+  cb.text:SetPoint("LEFT", cb, "RIGHT", 4, 0)
+  cb.text:SetText("Play buff sounds")
+  cb:SetChecked(DB.rhSounds and DB.rhSounds.enabled)
+  cb:SetScript("OnClick", function(self)
+    DB.rhSounds = DB.rhSounds or {}
+    DB.rhSounds.enabled = self:GetChecked()
+  end)
 
-function RallyHelper_ToggleUnconfirmed()
-  if not unconfUI then CreateUnconfirmedUI() end
-  if unconfUI:IsShown() then
-    unconfUI:Hide()
+  RH_UIFrame._rhSoundCheckboxCreated = true
+end
+
+ScheduleAfter(0.2, InjectSoundCheckbox)
+SLASH_RALLYTOAST1 = "/rallytoast"
+SlashCmdList["RALLYTOAST"] = function(input)
+  local m = strlower(input or "")
+  if m == "chat" or m == "ui" or m == "none" then
+    DB.toastMode = m
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] toastMode set to "..m)
   else
-    RallyHelper_UpdateUnconfirmed()
-    unconfUI:Show()
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallytoast chat|ui|none")
   end
 end
 
-local sizeUI
+SLASH_RALLYIGNORE1 = "/rallyignore"
+SlashCmdList["RALLYIGNORE"] = function(msg)
+  local cmd, name = msg:match("^(%S*)%s*(.-)$")
+  cmd = cmd and cmd:lower() or ""
+  if cmd == "add" and name ~= "" then
+    DB.rhIgnore = DB.rhIgnore or {}
+    DB.rhIgnore[name] = true
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Ignored "..name)
+  elseif cmd == "remove" and name ~= "" then
+    DB.rhIgnore = DB.rhIgnore or {}
+    DB.rhIgnore[name] = nil
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Unignored "..name)
+  elseif cmd == "list" then
+    DB.rhIgnore = DB.rhIgnore or {}
+    for n, _ in pairs(DB.rhIgnore) do DEFAULT_CHAT_FRAME:AddMessage(n) end
+  else
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Usage: /rallyignore add|remove|list <n>")
+  end
+end
 
-function CreateSizeUI()
-  if sizeUI then return end
+local function NormalizeChannelName(name)
+  if not name then return "" end
+  name = strlower(name)
+  name = strgsub(name, "^%d+%.%s*", "")
+  name = strgsub(name, "%s+", "")
+  return name
+end
 
-  local S = EnsureDB()
+local function HandleChannel(msg, channel)
+  if not msg or not channel or string.lower(channel) ~= string.lower(RH_CHANNEL_NAME) then return end
+  if type(msg) ~= "string" or msg == "" then return end
 
-  sizeUI = CreateFrame("Frame", "RallyHelperSizeFrame", UIParent)
-  sizeUI:SetWidth(340)
-  sizeUI:SetHeight(240)
-  sizeUI:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-  sizeUI:SetFrameStrata("DIALOG")
-
-  sizeUI:SetBackdrop({
-    bgFile="Interface\\DialogFrame\\UI-DialogBox-Background",
-    edgeFile="Interface\\DialogFrame\\UI-DialogBox-Border",
-    tile=true, tileSize=32, edgeSize=32,
-    insets={left=11,right=12,top=12,bottom=11}
-  })
-
-  sizeUI:EnableMouse(true)
-  sizeUI:SetMovable(true)
-  sizeUI:RegisterForDrag("LeftButton")
-  sizeUI:SetScript("OnDragStart", function() sizeUI:StartMoving() end)
-  sizeUI:SetScript("OnDragStop", function() sizeUI:StopMovingOrSizing() end)
-
-  local function CreateFS(parent, size, r, g, b)
-    local f = parent:CreateFontString(nil, "OVERLAY")
-    f:SetFont("Fonts\\FRIZQT__.TTF", size or 12, "OUTLINE")
-    if r then f:SetTextColor(r, g, b) end
-    f:SetJustifyH("LEFT")
-    return f
+  local function SplitMessage(m)
+    local out = {}
+    local start = 1
+    while true do
+      local p = string.find(m, "|", start, true)
+      if not p then 
+        table.insert(out, string.sub(m, start))
+        break 
+      end
+      table.insert(out, string.sub(m, start, p-1))
+      start = p + 1
+    end
+    return out
   end
 
-  local title = sizeUI:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  title:SetPoint("TOP", 0, -15)
-  title:SetText("RallyHelper UI Settings")
+  local parts         = SplitMessage(msg)
+  local ev            = parts[1]
+  local ts            = tonumber(parts[2])
+  local sender        = parts[3]
+  local zone          = parts[4]
+  local verPart       = parts[5]
+  local senderVersion = nil
 
-  local widthText = CreateFS(sizeUI, 14)
-  widthText:SetPoint("TOPLEFT", 20, -50)
-  widthText:SetText("Width")
+  if verPart and type(verPart) == "string" then
+    local v = string.match(verPart, "^v(%d+)$")
+    if v then senderVersion = tonumber(v) end
+  end
 
-  local widthSlider = CreateFrame("Slider", nil, sizeUI, "OptionsSliderTemplate")
-  widthSlider:SetPoint("TOPLEFT", 20, -70)
-  widthSlider:SetWidth(300)
-  widthSlider:SetMinMaxValues(300, 700)
-  widthSlider:SetValueStep(10)
+  RH_ClockOffset = RH_ClockOffset or {}
+  local now = time()
+  if ts and sender then
+    local offset = now - ts
+    RH_ClockOffset[sender] = (RH_ClockOffset[sender] or offset) * 0.8 + offset * 0.2
+  end
 
-  widthSlider:SetScript("OnValueChanged", function()
-    local v = floor(widthSlider:GetValue() + 0.5)
-    S.w = v
-    if ui then ui:SetWidth(v); ApplyLayout() end
-  end)
+  if not ev or not ts or not sender then return end
+  if zone == "" then zone = nil end
 
-  local heightText = CreateFS(sizeUI, 14)
-  heightText:SetPoint("TOPLEFT", 20, -110)
-  heightText:SetText("Height")
+  RH_Users[sender] = time()
 
-  local heightSlider = CreateFrame("Slider", nil, sizeUI, "OptionsSliderTemplate")
-  heightSlider:SetPoint("TOPLEFT", 20, -130)
-  heightSlider:SetWidth(300)
-  heightSlider:SetMinMaxValues(140, 400)
-  heightSlider:SetValueStep(10)
+  if DB and DB.rhIgnore and DB.rhIgnore[sender] then return end
 
-  heightSlider:SetScript("OnValueChanged", function()
-    local v = floor(heightSlider:GetValue() + 0.5)
-    S.h = v
-    if ui then ui:SetHeight(v); ApplyLayout() end
-  end)
+  if ev == "REQ" then
+    if sender ~= UnitName("player") then
+      RespondToRequest()
+    end
+    return
+  end
 
-  local scaleText = CreateFS(sizeUI, 14)
-  scaleText:SetPoint("TOPLEFT", 20, -160)
-  scaleText:SetText("Scale")
+  if string.sub(ev, 1, 6) == "TIMER_" then
+    local realEv = string.sub(ev, 7)
+    RH_TimerResponses = RH_TimerResponses or {}
+    RH_TimerResponses[realEv] = RH_TimerResponses[realEv] or {}
 
-  local scaleSlider = CreateFrame("Slider", nil, sizeUI, "OptionsSliderTemplate")
-  scaleSlider:SetPoint("TOPLEFT", 20, -180)
-  scaleSlider:SetWidth(300)
-  scaleSlider:SetMinMaxValues(0.7, 1.3)
-  scaleSlider:SetValueStep(0.05)
+    local adjusted = ts
+    if RH_ClockOffset and RH_ClockOffset[sender] then
+      adjusted = ts + RH_ClockOffset[sender]
+    end
 
-  scaleSlider:SetScript("OnValueChanged", function()
-    local v = floor(scaleSlider:GetValue() * 100 + 0.5) / 100
-    S.scale = v
-    if ui then ui:SetScale(v) end
-  end)
+    table.insert(RH_TimerResponses[realEv], {
+      ts     = ts,
+      adj    = adjusted,
+      sender = sender,
+      zone   = zone,
+      ver    = senderVersion or 0,
+    })
 
-  local close = CreateFrame("Button", nil, sizeUI, "UIPanelButtonTemplate")
-  close:SetWidth(80)
-  close:SetHeight(24)
-  close:SetPoint("BOTTOM", 0, 15)
-  close:SetText("Close")
-  close:SetScript("OnClick", function() sizeUI:Hide() end)
+    if not RH_TimerResponseTimers[realEv] then
+      RH_TimerResponseTimers[realEv] = true
+      ScheduleAfter(2, function()
+        local l_now = time()
+        local list = RH_TimerResponses[realEv] or {}
 
-  widthSlider:SetValue(S.w or DEFAULT_W)
-  heightSlider:SetValue(S.h or DEFAULT_H)
-  scaleSlider:SetValue(S.scale or DEFAULT_SCALE)
+        local filtered = {}
+        for _, v in ipairs(list) do
+          if (v.ver or 0) >= MIN_ACCEPTED_VERSION then table.insert(filtered, v) end
+        end
+        if table.getn(filtered) == 0 then filtered = list end
+
+        local bestIdx, bestDiff, bestTs, bestZone = nil, nil, 0, ""
+        for i, v in ipairs(filtered) do
+          local adj  = v.adj or v.ts
+          local diff = math.abs(adj - l_now)
+          if bestDiff == nil or diff < bestDiff then
+            bestDiff = diff; bestIdx = i; bestTs = v.ts; bestZone = v.zone
+          end
+        end
+
+        if bestIdx and bestTs > 0 then
+          AcceptEvent(realEv, bestTs, bestZone)
+        end
+
+        RH_TimerResponses[realEv]      = nil
+        RH_TimerResponseTimers[realEv] = nil
+      end)
+    end
+    return
+  end
+
+  if ev == "ZG" or ev == "DMF" then
+    AcceptEvent(ev, ts, zone)
+    return
+  end
+
+  local required = RH_VERIFY_REQUIRED
+  if required > 1 then required = 1 end 
+
+  local ok, bTs, bZone = VerifyEvent(ev, ts, sender, zone, required)
+  if ok then
+    AcceptEvent(ev, bTs, bZone)
+    if RH_Unconfirmed then RH_Unconfirmed[ev] = nil end
+  else
+    AddUnconfirmedEvent(ev, ts, sender, zone)
+  end
 end
 
-_G.RallyHelper_ToggleUI = function()
-  if not ui then CreateUI() end
-  if ui:IsShown() then ui:Hide() else ui:Show() end
+local function HandleYell(npc, msg)
+  if type(npc) ~= "string" or type(msg) ~= "string" then return end
+
+  local lowerMsg = string.lower(msg)
+  local function has(s) return string.find(lowerMsg, s, 1, true) ~= nil end
+
+  if npc == "Major Mattingly" and (has("onyxia") or has("head")) then
+    RH_LocalDetected["ONY_A"] = time() + LOCAL_DETECT_WINDOW
+    AcceptEvent("ONY_A", time())
+    SendEvent("ONY_A")
+    return
+  end
+
+  if npc == "Field Marshal Afrasiabi" and (has("nefarian") or has("blackrock")) then
+    RH_LocalDetected["NEF_A"] = time() + LOCAL_DETECT_WINDOW
+    AcceptEvent("NEF_A", time())
+    SendEvent("NEF_A")
+    return
+  end
+
+  if npc == "High Overlord Saurfang" and (has("onyxia") or has("brood mother")) then
+    RH_LocalDetected["ONY_H"] = time() + LOCAL_DETECT_WINDOW
+    AcceptEvent("ONY_H", time())
+    SendEvent("ONY_H")
+    return
+  end
+
+  if npc == "High Overlord Saurfang" and (has("nefarian") or has("blackrock")) then
+    RH_LocalDetected["NEF_H"] = time() + LOCAL_DETECT_WINDOW
+    AcceptEvent("NEF_H", time())
+    SendEvent("NEF_H")
+    return
+  end
+
+  if npc == "Overlord Runthak" then
+    if has("onyxia") or has("brood mother") then
+      RH_LocalDetected["ONY_H"] = time() + LOCAL_DETECT_WINDOW
+      AcceptEvent("ONY_H", time())
+      SendEvent("ONY_H")
+      return
+    end
+    if has("nefarian") or has("blackrock") then
+      RH_LocalDetected["NEF_H"] = time() + LOCAL_DETECT_WINDOW
+      AcceptEvent("NEF_H", time())
+      SendEvent("NEF_H")
+      return
+    end
+    return
+  end
+
+  if npc == "Molthor" and (has("hakkar") or has("slayer of hakkar")) then
+    RH_LocalDetected["ZG"] = time() + LOCAL_DETECT_WINDOW
+    AcceptEvent("ZG", time())
+    SendEvent("ZG")
+    return
+  end
+
+  if npc == "Thrall" and (has("warchief") or has("rend")) then
+    RH_LocalDetected["WB"] = time() + LOCAL_DETECT_WINDOW
+    AcceptEvent("WB", time(), "Orgrimmar")
+    SendEvent("WB", "Orgrimmar")
+    return
+  end
 end
 
-_G.RallyHelper_ToggleSizeUI = function()
-  if not sizeUI then CreateSizeUI() end
-  if sizeUI:IsShown() then sizeUI:Hide() else sizeUI:Show() end
+local DMF_NPCS = {
+  ["Sayge"]                      = true,
+  ["Professor Thaddeus Paleo"]   = true,
+  ["Gelvas Grimegate"]           = true,
+  ["Stamp Thunderhorn"]          = true,
+  ["Darkmoon Faire Mystic Mage"] = true,
+}
+
+local function SafeZoneText()
+  local z = GetZoneText() or ""
+  return str.gsub(z, "|", "/")
 end
 
-_G.RallyHelper_UpdateUI = UpdateTexts
-_G.RH_CreateUI = CreateUI
+local function TryDMF()
+  if UnitExists("npc") then
+    local name = UnitName("npc")
+    if DMF_NPCS[name] then
+      local zone = SafeZoneText()
+      if not DB.lastDMFTime or (time() - DB.lastDMFTime) > 5 then
+        RH_LocalDetected["DMF"] = time() + LOCAL_DETECT_WINDOW
+        AcceptEvent("DMF", time(), zone)
+        SendEvent("DMF", zone)
+      end
+    end
+  end
+end
+
+local function RequestTimers()
+  SendEvent("REQ")
+end
+
+local function FormatTimeSimple(sec)
+  if not sec or sec <= 0 then return "ready" end
+  local h = math.floor(sec / 3600)
+  local m = math.floor((sec - h * 3600) / 60)
+  if h > 0 then return h .. "h " .. m .. "m" end
+  return m .. "m"
+end
+
+function PrintStatus()
+  local now = time()
+  DEFAULT_CHAT_FRAME:AddMessage("Ony SW: " .. (DB.lastOnyA and FormatTimeSimple(DB.lastOnyA + ONY_CD - now) or "ready"))
+  DEFAULT_CHAT_FRAME:AddMessage("Ony OG: " .. (DB.lastOnyH and FormatTimeSimple(DB.lastOnyH + ONY_CD - now) or "ready"))
+  DEFAULT_CHAT_FRAME:AddMessage("Nef SW: " .. (DB.lastNefA and FormatTimeSimple(DB.lastNefA + NEF_CD - now) or "ready"))
+  DEFAULT_CHAT_FRAME:AddMessage("Nef OG: " .. (DB.lastNefH and FormatTimeSimple(DB.lastNefH + NEF_CD - now) or "ready"))
+  DEFAULT_CHAT_FRAME:AddMessage("ZG last drop: " .. (DB.lastZG and FormatAgo(DB.lastZG) or "unknown"))
+  DEFAULT_CHAT_FRAME:AddMessage("DMF last seen: " .. (DB.lastDMFTime and FormatAgo(DB.lastDMFTime) or "unknown"))
+  DEFAULT_CHAT_FRAME:AddMessage("Rend: " .. (DB.lastWB and FormatTimeSimple(DB.lastWB + WB_CD - now) or "ready"))
+end
+
+function RallyHelper_InsertToChat(text)
+  if not ChatFrameEditBox:IsShown() then
+    ChatFrame_OpenChat("")
+  end
+  ChatFrameEditBox:Insert(text)
+end
+
+function ShareTimersToChat()
+  local now = time()
+  RallyHelper_InsertToChat(
+    "Ony SW: " .. (DB.lastOnyA and FormatTimeSimple(DB.lastOnyA + ONY_CD - now) or "ready") .. " | " ..
+    "Ony OG: " .. (DB.lastOnyH and FormatTimeSimple(DB.lastOnyH + ONY_CD - now) or "ready") .. " | " ..
+    "Nef SW: " .. (DB.lastNefA and FormatTimeSimple(DB.lastNefA + NEF_CD - now) or "ready") .. " | " ..
+    "Nef OG: " .. (DB.lastNefH and FormatTimeSimple(DB.lastNefH + NEF_CD - now) or "ready")
+  )
+end
+
+local function CreateMinimapButton()
+  if pfUI and pfUI.api and pfUI.api.CreateMinimapButton then
+    pfUI.api.CreateMinimapButton("RallyHelperMinimapButton")
+    return
+  end
+
+  if RallyHelperMinimapButton then return end
+
+  local b = CreateFrame("Button", "RallyHelperMinimapButton", Minimap)
+  b:SetParent(Minimap)
+  b:SetFrameStrata("HIGH")
+  b:SetFrameLevel(10)
+  b:Show()
+  b:SetWidth(32)
+  b:SetHeight(32)
+  b:SetToplevel(true)
+  b:EnableMouse(true)
+  b:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
+  b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+
+  b.icon = b:CreateTexture(nil, "ARTWORK")
+  b.icon:SetTexture("Interface\\Icons\\INV_Misc_Head_Dragon_Red")
+  b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+  b.icon:SetPoint("CENTER", 0, 0)
+  b.icon:SetWidth(18)
+  b.icon:SetHeight(18)
+
+  b.border = b:CreateTexture(nil, "OVERLAY")
+  b.border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+  b.border:SetPoint("TOPLEFT", 0, 0)
+  b.border:SetWidth(54)
+  b.border:SetHeight(54)
+
+  DB.minimap = DB.minimap or { angle = 220, hide = false }
+
+  local function UpdatePos()
+    local a   = DB.minimap.angle or 220
+    local rad = a * 0.01745329252
+    local r   = 80
+    b:ClearAllPoints()
+    b:SetPoint("CENTER", Minimap, "CENTER", math.cos(rad) * r, math.sin(rad) * r)
+  end
+
+  local function CursorUI()
+    local scale = UIParent:GetEffectiveScale()
+    local x, y  = GetCursorPosition()
+    return x / scale, y / scale
+  end
+
+  b.isDown  = false
+  b.altDown = false
+  b.didDrag = false
+  b.downX, b.downY = 0, 0
+
+  b:SetScript("OnEnter", function()
+    GameTooltip:SetOwner(b, "ANCHOR_LEFT")
+    GameTooltip:AddLine("RallyHelper")
+    GameTooltip:AddLine("Left Click: Toggle UI")
+    GameTooltip:AddLine("Right Click: Status")
+    GameTooltip:AddLine("Shift + Left: Share timers")
+    GameTooltip:AddLine("Alt + Click: Size window")
+    GameTooltip:AddLine("Alt + Drag: Move icon")
+    GameTooltip:AddLine("Middle Mouse: Unconfirmed Buffs")
+    GameTooltip:Show()
+  end)
+
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+  b:SetScript("OnMouseDown", function()
+    if arg1 ~= "LeftButton" then return end
+    b.isDown  = true
+    b.altDown = IsAltKeyDown()
+    b.didDrag = false
+    b.downX, b.downY = CursorUI()
+  end)
+
+  b:SetScript("OnUpdate", function()
+    if not b.isDown or not b.altDown then return end
+    local cx, cy = CursorUI()
+    local dx, dy = cx - b.downX, cy - b.downY
+    if (dx*dx + dy*dy) < 16 then return end
+    b.didDrag = true
+    local mx, my = Minimap:GetCenter()
+    local ang = math.deg(math.atan2(cy - my, cx - mx))
+    if ang < 0 then ang = ang + 360 end
+    DB.minimap.angle = ang
+    UpdatePos()
+  end)
+
+  b:SetScript("OnMouseUp", function() b.isDown = false end)
+
+  b:SetScript("OnClick", function()
+    if arg1 == "MiddleButton" then
+      RallyHelper_ToggleUnconfirmed()
+      return
+    end
+    if arg1 == "RightButton" then
+      PrintStatus()
+      return
+    end
+    if IsAltKeyDown() then
+      if b.didDrag then b.didDrag = false; return end
+      RallyHelper_ToggleSizeUI()
+      return
+    end
+    if IsShiftKeyDown() then
+      ShareTimersToChat()
+      return
+    end
+    RallyHelper_ToggleUI()
+  end)
+
+  UpdatePos()
+  if DB.minimap and DB.minimap.hide == true then
+    b:Hide()
+  else
+    b:Show()
+  end
+end
+
+SLASH_RALLYHELPER1 = "/rally"
+SlashCmdList["RALLYHELPER"] = function(msg)
+  msg = string.lower(msg or "")
+
+  if msg == "status" then
+    PrintStatus()
+  elseif msg == "share" then
+    ShareTimersToChat()
+  elseif msg == "reset" then
+    DB.ui = nil
+    ReloadUI()
+  elseif msg == "toast" then
+    DB.toast = not DB.toast
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Toast messages: " .. tostring(DB.toast))
+  elseif msg == "lock" then
+    DB.locked = not DB.locked
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] UI lock: " .. tostring(DB.locked))
+  elseif msg == "users" then
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Users online: " .. CountUsers())
+  elseif msg == "request" then
+    RequestTimers()
+    DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper] Requested timers from channel")
+  else
+    RallyHelper_ToggleUI()
+  end
+end
+
+local f = CreateFrame("Frame")
+f:RegisterEvent("ADDON_LOADED")
+f:RegisterEvent("PLAYER_LOGIN")
+f:RegisterEvent("PLAYER_ENTERING_WORLD")
+f:RegisterEvent("CHAT_MSG_ADDON")
+f:RegisterEvent("CHAT_MSG_CHANNEL")
+f:RegisterEvent("CHAT_MSG_MONSTER_YELL")
+f:RegisterEvent("GOSSIP_SHOW")
+f:RegisterEvent("QUEST_GREETING")
+f:RegisterEvent("MERCHANT_SHOW")
+local function TryEnsureUIOnce()
+  pcall(EnsureDB)
+  if type(RH_CreateUI) == "function" then
+    pcall(RH_CreateUI)
+    if RH_UIFrame and type(RH_UIFrame.Show) == "function" then
+      pcall(function() RH_UIFrame:Show() end)
+    end
+  end
+  DB = DB or RallyHelperDB or {}
+  DB.minimap = DB.minimap or { angle = 220, hide = false }
+  pcall(CreateMinimapButton)
+  if RallyHelperMinimapButton and type(RallyHelperMinimapButton.Show) == "function" then
+    if DB.minimap and DB.minimap.hide == true then
+      pcall(function() RallyHelperMinimapButton:Hide() end)
+    else
+      pcall(function() RallyHelperMinimapButton:Show() end)
+    end
+  end
+end
+
+TryEnsureUIOnce()
+ScheduleAfter(0.25, TryEnsureUIOnce)
+ScheduleAfter(0.6, TryEnsureUIOnce)
+ScheduleAfter(1.2, TryEnsureUIOnce)
+
+
+f:SetScript("OnEvent", function(self, event, arg1, arg2, arg3, arg4)
+  if event == "ADDON_LOADED" then
+    if arg1 == "RallyHelper" then
+      pcall(EnsureDB)
+      if type(RH_CreateUI) == "function" then
+        pcall(RH_CreateUI)
+        if RH_UIFrame and RH_UIFrame.Show then pcall(function() RH_UIFrame:Show() end) end
+      end
+      pcall(CreateMinimapButton)
+    end
+    return
+  end
+
+  if event == "PLAYER_LOGIN" then
+    pcall(EnsureDB)
+    JoinChannel()
+    if type(RH_CreateUI) == "function" then
+      pcall(RH_CreateUI)
+      if RH_UIFrame and RH_UIFrame.Show then pcall(function() RH_UIFrame:Show() end) end
+    end
+    pcall(CreateMinimapButton)
+    ScheduleAfter(0.6, function()
+      if type(RH_CreateUI) == "function" then
+        pcall(RH_CreateUI)
+        if RH_UIFrame and RH_UIFrame.Show then pcall(function() RH_UIFrame:Show() end) end
+      end
+      pcall(CreateMinimapButton)
+    end)
+    return
+  end
+  if event == "PLAYER_ENTERING_WORLD" then
+    pcall(EnsureDB)
+    if type(RH_CreateUI) == "function" then
+      pcall(RH_CreateUI)
+      if RH_UIFrame and RH_UIFrame.Show then pcall(function() RH_UIFrame:Show() end) end
+    end
+    pcall(CreateMinimapButton)
+    return
+  end
+  if event == "CHAT_MSG_ADDON" then
+    local prefix  = arg1
+    local message = arg2
+    local channel = arg3
+    local sender  = arg4
+    if prefix == RH_ADDON_PREFIX and type(message) == "string" then
+      if DB and DB.showRawInChat then
+        DEFAULT_CHAT_FRAME:AddMessage("[RallyHelper RAW] " .. tostring(message))
+      end
+      HandleChannel(message, tostring(channel or ""))
+    end
+    return
+  end
+if event == "CHAT_MSG_CHANNEL" then
+    HandleChannel(arg1, arg4)
+    return
+  end
+  if event == "CHAT_MSG_MONSTER_YELL" then
+    HandleYell(arg2, arg1)
+    return
+  end
+  if event == "GOSSIP_SHOW" or event == "QUEST_GREETING" or event == "MERCHANT_SHOW" then
+    TryDMF()
+    return
+  end
+end)
